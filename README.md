@@ -1,8 +1,8 @@
-# singleline
+# fastakit
 A bash script for FASTA sequence formatting and modification.
 
 ```
-singleline [OPTIONS] FASTA_file.fasta
+fastakit [OPTIONS] FASTA_file.fasta
 	-o | --out	Output to file (otherwise to stdout)
 	-n | --name_sort	Sort FASTA by name
 	-s | --length_sort	Sort FASTA by sequence length (shortest to longest)
