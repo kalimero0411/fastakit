@@ -19,7 +19,7 @@ fastakit [OPTIONS] FASTA_file.fasta
 	-t | --threads #	Number of CPU threads to use (Default = 1)
 	-v | --verbose	Verbose
 	-h | --help	Display help
-	--available_codes	Show available tranlsation codes
+	--available_codes	Show available translation codes
 ```
   
 - If `--orf` option is selected, each sequence will be divided into individual ORFs from a start to a stop codon in the current frame, or until the end of the sequence.
