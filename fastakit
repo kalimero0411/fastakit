@@ -1,0 +1,581 @@
+#!/usr/bin/env bash
+
+# Default parameters
+out=0
+threads=1
+name_sort=0
+reverse_sort=0
+length_sort=0
+lettercase=0
+complement=0
+rev_seq=0
+orf=0
+frame=1
+translate=0
+min_prot=0
+translate_table=1
+verbose=0
+help=0
+
+print_usage(){
+ printf "
+fastakit [OPTIONS] FASTA_file.fasta
+	-o | --out	Output to file (otherwise to stdout)
+	-n | --name_sort	Sort FASTA by name
+	-s | --length_sort	Sort FASTA by sequence length (shortest to longest)
+	-r | --reverse_sort	Sort in reverse order
+	-u | --upper	Sequences to uppercase
+	-l | --lower	Sequences to lowercase
+	-c | --complement	Complementary sequence
+	-m | --reverse_seq	Reverse sequence
+	-g | --orf	Sequence from first ATG in frame (Default frame 1)
+	-p | --translate	Protein sequences in current frame (Default frame 1)
+	-a | --table	Translation code (Default standard code)
+	-f | --frame	Frame to extract codons (must be 1, 2 or 3)
+	-e | --min_prot #	Minimum protein size (assumes --translate)
+	-t | --threads #	Number of CPU threads to use (Default = 1)
+	-v | --verbose	Verbose
+	-h | --help	Display help
+	--available_codes	Show available translation codes
+
+"
+}
+
+# Error function
+error_exit(){
+	echo "$1" 1>&2
+	exit 1
+}
+
+# Alternative tables
+tables(){
+printf "
+	Available translation codes:
+	1 - Standard code
+	2 - Vertebrate Mitochondrial code
+	3 - Yeast mitochondrial code
+	4 - Mold, protozoan, and coelenterate mitochondrial code and the mycoplasma/spiroplasma code
+
+"
+}
+
+# Check arguments
+for arg in "$@"
+do
+ case $arg in
+  -o | --out)
+  out=1 # Output to file
+  shift
+  outfile=$1
+  shift
+  ;;
+  -n | --name_sort)
+  name_sort=1 # Sort FASTA file by name
+  shift
+  ;;
+  -s | --length_sort)
+  length_sort=1 # Sort FASTA file by sequence length
+  shift
+  ;;
+  -r | --reverse_sort)
+  reverse_sort=1 # Sort in reverse order
+  shift
+  ;;
+  -u | --upper)
+  lettercase=1 # Sequences to uppercase
+  shift
+  ;;
+  -l | --lower)
+  lettercase=2 # Sequences to lowercase
+  shift
+  ;;
+  -c | --complement)
+  complement=1 # Complementary sequences
+  shift
+  ;;
+  -m | --reverse_seq)
+  rev_seq=1 # Reverse sequences
+  shift
+  ;;
+  -f | --frame)
+  shift # Set frame for codons
+  frame=$1
+  shift
+  ;;
+  -g | --orf)
+  orf=1 # Sequence from first ATG in frame
+  shift
+  ;;
+  -p | --translate)
+  translate=1 # Translate sequences
+  shift
+  ;;
+  -a | --table)
+  shift
+  translate_table=$1 # Alternative translation table
+  shift
+  ;;
+  --available_codes)
+  tables
+  exit 0
+  ;;
+  -e | --min_prot)
+  min_prot=1 # Minimum protein size
+  translate=1 # Translate sequences
+  shift
+  min_prot_length=$1
+  shift
+  ;;
+  -t | --threads)
+  shift
+  threads=$1 # Number of CPU threads
+  shift
+  ;;
+  -v | --verbose)
+  verbose=1 # Print file names and arguments
+  shift
+  ;;
+  -h | --help)
+  print_usage
+  exit 1
+  ;;
+  *)
+  esac
+  done
+  
+  # Translation functions
+  # Standard code
+  if [[ $translate_table = 1 ]]
+  then
+  translate(){
+	while read seq; do \
+	echo $seq |
+	awk '{print tolower($0)}' |
+	sed --regexp-extended \
+     's/atg/M/g;
+      s/at[tca]/I/g;
+      s/ac[actg]/T/g;
+      s/aa[tc]/N/g;
+      s/aa[ag]/K/g;
+      s/ag[tc]/S/g;
+      s/ag[ag]/R/g;
+      s/tt[tc]/F/g;
+      s/tt[ag]/L/g;
+      s/tc[acgt]/S/g;
+      s/ta[tc]/Y/g;
+      s/ta[ag]/*/g;
+      s/tg[tc]/C/g;
+      s/tga/*/g;
+      s/tgg/W/g;
+      s/ct[acgt]/L/g;
+      s/cc[acgt]/P/g;
+      s/ca[tc]/H/g;
+      s/ca[ag]/Q/g;
+      s/cg[acgt]/R/g;
+      s/gt[acgt]/V/g;
+      s/gc[acgt]/A/g;
+      s/ga[tc]/D/g;
+      s/ga[ag]/E/g;
+      s/gg[acgt]/G/g' \
+      ;done
+}
+  fi
+  
+  # Vertebrate mitochondrial code
+  if [[ $translate_table = 2 ]]
+  then
+  translate(){
+	while read seq; do \
+	echo $seq |
+	awk '{print tolower($0)}' |
+	sed --regexp-extended \
+     's/at[ag]/M/g;
+      s/at[tc]/I/g;
+      s/ac[actg]/T/g;
+      s/aa[tc]/N/g;
+      s/aa[ag]/K/g;
+      s/ag[tc]/S/g;
+      s/ag[ag]/*/g;
+      s/tt[tc]/F/g;
+      s/tt[ag]/L/g;
+      s/tc[acgt]/S/g;
+      s/ta[tc]/Y/g;
+      s/ta[ag]/*/g;
+      s/tg[tc]/C/g;
+      s/tg[ag]/W/g;
+      s/ct[acgt]/L/g;
+      s/cc[acgt]/P/g;
+      s/ca[tc]/H/g;
+      s/ca[ag]/Q/g;
+      s/cg[acgt]/R/g;
+      s/gt[acgt]/V/g;
+      s/gc[acgt]/A/g;
+      s/ga[tc]/D/g;
+      s/ga[ag]/E/g;
+      s/gg[acgt]/G/g' \
+      ;done
+}
+  fi
+
+  # Yeast mitochondrial code
+  if [[ $translate_table = 3 ]]
+  then
+  translate(){
+	while read seq; do \
+	echo $seq |
+	awk '{print tolower($0)}' |
+	sed --regexp-extended \
+     's/at[ag]/M/g;
+      s/at[tc]/I/g;
+      s/ac[actg]/T/g;
+      s/aa[tc]/N/g;
+      s/aa[ag]/K/g;
+      s/ag[tc]/S/g;
+      s/ag[ag]/R/g;
+      s/tt[tc]/F/g;
+      s/tt[ag]/L/g;
+      s/tc[acgt]/S/g;
+      s/ta[tc]/Y/g;
+      s/ta[ag]/*/g;
+      s/tg[tc]/C/g;
+      s/tg[ag]/W/g;
+      s/ct[acgt]/T/g;
+      s/cc[acgt]/P/g;
+      s/ca[tc]/H/g;
+      s/ca[ag]/Q/g;
+      s/cg[gt]/R/g;
+      s/gt[acgt]/V/g;
+      s/gc[acgt]/A/g;
+      s/ga[tc]/D/g;
+      s/ga[ag]/E/g;
+      s/gg[acgt]/G/g;
+      s/cg[ac]/X/g' \
+      ;done
+}
+  fi
+  
+  # Mold, protozoan, and coelenterate mitochondrial code and the mycoplasma/spiroplasma code
+  if [[ $translate_table = 4 ]]
+  then
+  translate(){
+	while read seq; do \
+	echo $seq |
+	awk '{print tolower($0)}' |
+	sed --regexp-extended \
+     's/atg/M/g;
+      s/at[tca]/I/g;
+      s/ac[actg]/T/g;
+      s/aa[tc]/N/g;
+      s/aa[ag]/K/g;
+      s/ag[tc]/S/g;
+      s/ag[ag]/R/g;
+      s/tt[tc]/F/g;
+      s/tt[ag]/L/g;
+      s/tc[acgt]/S/g;
+      s/ta[tc]/Y/g;
+      s/ta[ag]/*/g;
+      s/tg[tc]/C/g;
+      s/tg[ag]/W/g;
+      s/ct[acgt]/L/g;
+      s/cc[acgt]/P/g;
+      s/ca[tc]/H/g;
+      s/ca[ag]/Q/g;
+      s/cg[acgt]/R/g;
+      s/gt[acgt]/V/g;
+      s/gc[acgt]/A/g;
+      s/ga[tc]/D/g;
+      s/ga[ag]/E/g;
+      s/gg[acgt]/G/g' \
+      ;done
+}
+  fi
+  
+  # Frame exception
+  if [[ $frame < 1 || $frame > 3 ]]
+  then
+   echo "Frame value must be 1, 2 or 3"
+   print_usage
+   exit 1
+  fi
+  
+  # Table exception
+  if [[ $translate_table < 1 || $translate_table > 4 ]]
+  then
+   echo "Error: Unknown translation code"
+   tables
+   exit 1
+  fi
+  
+  # Verbose output
+    if [[ $verbose = 1 ]]
+    then
+    if [[ $name_sort = 1 ]]; then echo "Sort by name"; fi
+    if [[ $length_sort = 1 ]]; then echo "Sort by length"; fi
+    if [[ $reverse_sort = 1 ]]; then echo "Sort in reverse order"; fi
+    if [[ $lettercase = 1 ]]; then echo "Change to UPPERCASE"; fi
+    if [[ $lettercase = 2 ]]; then echo "Change to lowercase"; fi
+    if [[ $complement = 1 ]]; then echo "Change to complement sequence"; fi
+    if [[ $rev_seq = 1 ]]; then echo "Change to reverse sequence"; fi
+    if [[ $orf = 1 ]]; then echo "ORF | frame "$frame; fi
+    if [[ $translate = 1 ]]; then echo "Translate | frame "$frame; fi
+    if [[ $translate_table != 1 ]]; then echo "Translation code: "$translate_table; fi
+    if [[ $min_prot = 1 ]]; then echo "Minimum protein length: "$min_prot_length; fi
+    if [[ $out = 1 ]]; then echo $(basename $file)" ---> "$outfile; fi
+    fi
+    
+    # Create temp files
+    TMPFILE1=$(mktemp)
+    TMPFILE2=$(mktemp)
+    
+    # Read from file or stdin
+    while read input
+     do
+      echo "$input"
+     done < "${1:-/dev/stdin}" > $TMPFILE1
+
+
+    # Remove carriage return
+    sed --regexp-extended 's/\r//g' $TMPFILE1 > $TMPFILE2
+    cp --force $TMPFILE2 $TMPFILE1
+    
+    # Create single line FASTA and change to specified case
+    if [[ $lettercase = 0 ]]
+    then
+     awk '/^>/ {printf("%s%s\t",(N>0?"\n":""),$0);N++;next;} {printf("%s",$0);}  END {printf("\n");}' $TMPFILE1
+    
+    # Convert to upper-case
+    elif [[ $lettercase = 1 ]]
+     then
+      awk '/^>/ {printf("%s%s\t",(N>0?"\n":""),$0);N++;next;} {printf("%s",toupper($0));}  END {printf("\n");}' $TMPFILE1
+
+    # Convert to lower-case
+     elif [[ $lettercase = 2 ]]
+      then
+       awk '/^>/ {printf("%s%s\t",(N>0?"\n":""),$0);N++;next;} {printf("%s",tolower($0));}  END {printf("\n");}' $TMPFILE1
+    fi > $TMPFILE2
+    cp --force $TMPFILE2 $TMPFILE1
+    
+     # Get complementary sequences
+     if [[ $complement = 1 ]]
+     then
+      awk '{print $1; system("echo "$2" | tr \"ATCGatcg\" \"TAGCtagc\"")}' $TMPFILE1 |
+      awk 'BEGIN {RS=">"} NR>1 {gsub("\n", "\t"); print ">"$0}' > $TMPFILE2
+      cp --force $TMPFILE2 $TMPFILE1
+     fi
+     
+     # Get reverse sequences
+     if [[ $rev_seq = 1 ]]
+     then
+      awk '{print $1; system("echo "$2" | rev")}' $TMPFILE1 |
+      awk 'BEGIN {RS=">"} NR>1 {gsub("\n", "\t"); print ">"$0}' > $TMPFILE2
+      cp --force $TMPFILE2 $TMPFILE1
+     fi
+     
+     # Change frame
+     if [[ $frame != 1 ]]
+     then
+      awk -F $'\t' -v frame="$frame" '{OFS="\t"; print $1, substr($2,frame,length($2))}' $TMPFILE1 > $TMPFILE2
+      cp --force $TMPFILE2 $TMPFILE1
+     fi
+     
+     # Get sequence ORFs
+     if [[ $orf = 1 ]]
+     then
+     get_orfs(){
+     
+     local ORFstart=$1
+     local ORFend=$2
+     local ORFFILE1=$(mktemp)
+     local ORFFILE2=$(mktemp)
+     local ORFFILE3=$(mktemp)
+     local HEADERS=$(mktemp)
+     
+     if [[ $threads != 1 ]]
+     then
+      sed -n ''"$ORFstart"','"$ORFend"'p;'"$(($ORFend + 1))"'q' $TMPFILE1 > $ORFFILE1
+     else
+      cp --force $TMPFILE1 $ORFFILE1
+     fi
+     
+      # Separate codons
+      paste <(awk -F $'\t' '{print $1}' $ORFFILE1) <(awk -F $'\t' '{print $2}' $ORFFILE1 |
+      awk -F '' '{for(i=1; i<=NF; i+=3) {printf "%s%s ", $i,$(i+1)$(i+2);}; print ""}') |
+      grep --ignore-case --perl-regexp "atg" > $ORFFILE2
+      cp --force $ORFFILE2 $ORFFILE1
+      
+      # Cut to first start codon
+      orf_num=1
+      awk -F $'\t' '{OFS="\t"; print $1, substr($2,match(tolower($2),"atg "))}' $ORFFILE1 > $ORFFILE3
+      awk -F $'\t' '{print $2}' $ORFFILE3 > $ORFFILE1
+      awk -F $'\t' '{print $1}' $ORFFILE3 > $HEADERS
+
+      # Output until first stop codon
+      paste <(awk -v orf_num="$orf_num" '{print $0"_orf"orf_num}' $HEADERS) <(awk -F $'\t' '{OFS="\t";
+      print substr($2,1,match(tolower($2),"ta[ag] |tga |$")+2)}' $ORFFILE3 |
+      tr -d " ") > $ORFFILE2
+
+      # Remove non-stop sequences
+      awk -F $'\t' '{if(match(tolower($0),"ta[ag] |tga ") > 0) print $0;
+        if(match(tolower($0),"ta[ag] |tga ") == 0) print ""}' $ORFFILE1 > $ORFFILE3
+      cp --force $ORFFILE3 $ORFFILE1
+
+      # Loop over other ORFs
+      while [[ $(grep --ignore-case --count --perl-regexp "atg " $ORFFILE1) != 0 ]]
+      do
+      
+      orf_num=$(($orf_num + 1))
+
+       # Cut until first stop codon or until end of line
+       awk -F $'\t' '{print substr($0,match(tolower($0),"ta[ag] |tga |$")+4)}' $ORFFILE1 |
+        
+       # Cut until first start codon
+       awk -F $'\t' '{if(match(tolower($0),"atg ") > 0) print substr($0,match(tolower($0),"atg "));
+       if(match(tolower($0),"atg ") == 0) print ""}' > $ORFFILE3
+       cp --force $ORFFILE3 $ORFFILE1
+       
+       paste $ORFFILE2 <(awk -v orf_num="$orf_num" '{print $0"_orf"orf_num}' $HEADERS) > $ORFFILE3
+       cp --force $ORFFILE3 $ORFFILE2
+       
+       # Join next ORF
+       paste $ORFFILE2 <(awk -F $'\t' '{OFS="\t";
+        print substr($0,1,match(tolower($0),"ta[ag] |tga |$")+2)}' $ORFFILE1 |
+        tr -d " ") > $ORFFILE3
+          
+         cp --force $ORFFILE3 $ORFFILE2
+         
+         # Remove non-stop sequences
+         awk -F $'\t' '{if(match(tolower($0),"ta[ag] |tga ") > 0) print $0;
+        if(match(tolower($0),"ta[ag] |tga ") == 0) print ""}' $ORFFILE1 > $ORFFILE3
+        cp --force $ORFFILE3 $ORFFILE1
+      done
+      
+      sed --regexp-extended 's/\t{1,}/\t/g; s/\t$//g' $ORFFILE2 |
+      sed --regexp-extended 's/\t>/\n>/g' |
+      grep --perl-regexp "\t" >> $TMPFILE2
+      
+      # Cleanup
+      rm --force $ORFFILE1
+      rm --force $ORFFILE2
+      rm --force $ORFFILE3
+      rm --force $HEADERS
+     }
+     
+     # Allocate sequences to requested threads
+     seq_num=$(grep -cP "^>" $TMPFILE1)
+     if [[ $seq_num -lt $threads ]]
+     then
+      threads=$seq_num
+     fi
+     
+     # Setup start and end lines for dividing sequences
+     BATCH=$(( seq_num / $threads ))
+     remainder=$(( seq_num % $threads ))
+     
+     start=1
+     end=()
+     for ((core=0;core <= $(($threads- 1));core++))
+     do
+      if [[ ${#end[@]} != 0 ]]
+      then
+       start=(${start[@]} $((${end[$(($core - 1))]} + 1)))
+      fi
+      if [[ $core -lt $remainder ]]
+      then
+       end=(${end[@]} $((${start[$core]} + $BATCH)))
+      else
+       end=(${end[@]} $((${start[$core]} + $BATCH - 1)))
+      fi
+     done
+     
+     # Loop for function getting ORFs for multithreading
+     : > $TMPFILE2
+     for ((core=0;core <= $(($threads - 1));core++))
+     do
+      get_orfs ${start[$core]} ${end[$core]} &
+      pids[$core]=$!
+     done
+     
+     for pid in ${pids[*]}
+     do
+      wait $pid
+     done
+     
+     if [[ $threads -gt 1 ]]
+     then
+      HEADERS=$(mktemp)
+      awk '{print $1}' $TMPFILE1 > $HEADERS
+      : > $TMPFILE1
+      while read LINE
+      do
+      grep "$LINE" "$TMPFILE2" >> "$TMPFILE1"
+      done < "$HEADERS"
+     else
+      cp --force $TMPFILE2 $TMPFILE1
+     fi
+    fi
+    
+    if [[ $translate = 1 ]]
+    then
+    
+    # Separate to codons and translate
+     paste <(awk -F $'\t' '{print $1}' $TMPFILE1) <(awk -F $'\t' '{print $2}' $TMPFILE1 |
+      awk -F '' '{for(i=1; i<=NF; i+=3) {printf "%s%s ", $i,$(i+1)$(i+2);}; print ""}' |
+      translate |
+       sed --regexp-extended 's/[atcg]{1,}$//g' |
+       tr -d " " |
+       
+       # remove if less than cutoff
+       if [[ $min_prot = 1 ]]
+       then
+        awk -v min_prot_length="$min_prot_length" '{if(match($0,"*|$") - 1 >= min_prot_length) print $0;
+        if(match($0,"*|$") - 1 < min_prot_length) print ""}'
+       else
+        cat
+       fi) |
+       grep --perl-regexp "\t." > $TMPFILE2
+      cp --force $TMPFILE2 $TMPFILE1
+    fi
+    
+     # Sort by name
+     if [[ $name_sort = 1 ]]
+     then
+      if [[ $reverse_sort = 1 ]]
+      then
+       sort --reverse --field-separator=$'\t' --key=1 $TMPFILE1 > $TMPFILE2
+      else
+       sort --field-separator=$'\t' --key=1 $TMPFILE1 > $TMPFILE2
+      fi
+      cp --force $TMPFILE2 $TMPFILE1
+     fi
+    
+    # Sort by sequence length
+     if [[ $length_sort = 1 ]]
+     then
+      awk '{print length, $0}' $TMPFILE1 |
+      if [[ $reverse_sort = 1 ]]
+      then
+       sort --numeric-sort --reverse
+      else
+       sort --numeric-sort
+      fi |
+      cut --delimiter=" " --fields=2- > $TMPFILE2
+      cp --force $TMPFILE2 $TMPFILE1
+     fi
+     
+     # Convert tabbed to FASTA and remove empty headers
+     cat $TMPFILE1 |
+     tr "\t" "\n" > $TMPFILE2
+     cp --force $TMPFILE2 $TMPFILE1
+     
+        
+    # Output to file or stdout
+    if [[ $out = 1 ]]
+    then
+     cp --force $TMPFILE1 $outfile
+    else
+     cat $TMPFILE1
+    fi
+    
+    rm --force $TMPFILE1
+    rm --force $TMPFILE2
+    rm --force $HEADERS
