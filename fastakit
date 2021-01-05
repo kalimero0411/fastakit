@@ -14,6 +14,7 @@ frame=1
 translate=0
 min_prot=0
 translate_table=1
+percent_GC=0
 verbose=0
 help=0
 
@@ -34,6 +35,7 @@ fastakit [OPTIONS] FASTA_file.fasta
 	-f | --frame	Frame to extract codons (must be 1, 2 or 3)
 	-e | --min_prot #	Minimum protein size (assumes --translate)
 	-t | --threads #	Number of CPU threads to use (Default = 1)
+	-d | --gc	Get percent GC per sequence (turns off --translate)
 	-v | --verbose	Verbose
 	-h | --help	Display help
 	--available_codes	Show available translation codes
@@ -108,6 +110,10 @@ do
   ;;
   -p | --translate)
   translate=1 # Translate sequences
+  shift
+  ;;
+  -d | --gc)
+  percent_GC=1 # Get percent GC per sequence
   shift
   ;;
   -a | --table)
@@ -306,6 +312,11 @@ do
    exit 1
   fi
   
+  if [[ $percent_GC = 1 ]]
+  then
+   translate=0
+  fi
+  
   # Verbose output
     if [[ $verbose = 1 ]]
     then
@@ -320,6 +331,7 @@ do
     if [[ $translate = 1 ]]; then echo "Translate | frame "$frame; fi
     if [[ $translate_table != 1 ]]; then echo "Translation code: "$translate_table; fi
     if [[ $min_prot = 1 ]]; then echo "Minimum protein length: "$min_prot_length; fi
+    if [[ $percent_GC = 1 ]]; then echo "Percent GC"; fi
     if [[ $out = 1 ]]; then echo $(basename $file)" ---> "$outfile; fi
     fi
     
@@ -536,6 +548,12 @@ do
       cp --force $TMPFILE2 $TMPFILE1
     fi
     
+     # GC content
+     if [[ $percent_GC = 1 ]]
+     then
+      awk -F $'\t' '{OFS="\t"; var=length($2);gsub("[AaTt]","",$2);print $1,length($2)/var*100}' $TMPFILE1
+      exit 0
+     fi
      # Sort by name
      if [[ $name_sort = 1 ]]
      then
