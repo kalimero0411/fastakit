@@ -17,6 +17,7 @@ fastakit [OPTIONS] FASTA_file.fasta
 	-f | --frame	Frame to extract codons (must be 1, 2 or 3)
 	-e | --min_prot #	Minimum protein size (assumes --translate)
 	-t | --threads #	Number of CPU threads to use (Default = 1)
+	-d | --gc	Get percent GC per sequence (turns off --translate)
 	-v | --verbose	Verbose
 	-h | --help	Display help
 	--available_codes	Show available translation codes
