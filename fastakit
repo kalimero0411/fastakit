@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
 # Default parameters
+singleline=1
 out=0
 threads=1
 name_sort=0
@@ -38,6 +39,7 @@ fastakit [OPTIONS] FASTA_file.fasta
 	-d | --gc	Get percent GC per sequence (turns off --translate)
 	-v | --verbose	Verbose
 	-h | --help	Display help
+	--skip_singleline	Skip changing multi-line FASTA to single-line FASTA 
 	--available_codes	Show available translation codes
 
 "
@@ -119,6 +121,11 @@ do
   -a | --table)
   shift
   translate_table=$1 # Alternative translation table
+  shift
+  ;;
+  --skip_singleline)
+  shift
+  singleline=0 # Skip single-line convertion
   shift
   ;;
   --available_codes)
@@ -320,6 +327,7 @@ do
   # Verbose output
     if [[ $verbose = 1 ]]
     then
+    if [[ $singleline = 1 ]]; then echo "Write in single-line FASTA"; fi
     if [[ $name_sort = 1 ]]; then echo "Sort by name"; fi
     if [[ $length_sort = 1 ]]; then echo "Sort by length"; fi
     if [[ $reverse_sort = 1 ]]; then echo "Sort in reverse order"; fi
@@ -348,24 +356,27 @@ do
 
     # Remove carriage return
     sed --regexp-extended 's/\r//g' $TMPFILE1 > $TMPFILE2
-    cp --force $TMPFILE2 $TMPFILE1
     
     # Create single line FASTA and change to specified case
+    if [[ $singleline = 1 ]]
+    then
     if [[ $lettercase = 0 ]]
     then
-     awk '/^>/ {printf("%s%s\t",(N>0?"\n":""),$0);N++;next;} {printf("%s",$0);}  END {printf("\n");}' $TMPFILE1
+     awk '/^>/ {printf("%s%s\t",(N>0?"\n":""),$0);N++;next;} {printf("%s",$0);}  END {printf("\n");}' $TMPFILE2
     
     # Convert to upper-case
     elif [[ $lettercase = 1 ]]
      then
-      awk '/^>/ {printf("%s%s\t",(N>0?"\n":""),$0);N++;next;} {printf("%s",toupper($0));}  END {printf("\n");}' $TMPFILE1
+      awk '/^>/ {printf("%s%s\t",(N>0?"\n":""),$0);N++;next;} {printf("%s",toupper($0));}  END {printf("\n");}' $TMPFILE2
 
     # Convert to lower-case
      elif [[ $lettercase = 2 ]]
       then
-       awk '/^>/ {printf("%s%s\t",(N>0?"\n":""),$0);N++;next;} {printf("%s",tolower($0));}  END {printf("\n");}' $TMPFILE1
-    fi > $TMPFILE2
-    cp --force $TMPFILE2 $TMPFILE1
+       awk '/^>/ {printf("%s%s\t",(N>0?"\n":""),$0);N++;next;} {printf("%s",tolower($0));}  END {printf("\n");}' $TMPFILE2
+    fi > $TMPFILE1
+    else
+     paste <(grep --perl-regexp ">" $TMPFILE2) <(grep --perl-regexp --invert-match ">" $TMPFILE2) > $TMPFILE1
+    fi
     
      # Get complementary sequences
      if [[ $complement = 1 ]]

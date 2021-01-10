@@ -21,6 +21,7 @@ fastakit [OPTIONS] FASTA_file.fasta
 	-v | --verbose	Verbose
 	-h | --help	Display help
 	--available_codes	Show available translation codes
+	--skip_singleline	Skip changing multi-line FASTA to single-line FASTA 
 ```
   
 - If `--orf` option is selected, each sequence will be divided into individual ORFs from a start to a stop codon in the current frame, or until the end of the sequence.
