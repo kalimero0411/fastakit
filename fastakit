@@ -124,8 +124,7 @@ do
   shift
   ;;
   --skip_singleline)
-  shift
-  singleline=0 # Skip single-line convertion
+  singleline=0 # Skip single-line conversion
   shift
   ;;
   --available_codes)
@@ -344,6 +343,7 @@ do
     fi
     
     # Create temp files
+    HEADERS=$(mktemp)
     TMPFILE1=$(mktemp)
     TMPFILE2=$(mktemp)
     
@@ -351,54 +351,54 @@ do
     while read input
      do
       echo "$input"
-     done < "${1:-/dev/stdin}" > $TMPFILE1
-
-
-    # Remove carriage return
-    sed --regexp-extended 's/\r//g' $TMPFILE1 > $TMPFILE2
+     done < "${1:-/dev/stdin}" |
+     sed --regexp-extended 's/\r//g' > $TMPFILE2
+     grep --perl-regexp "^>" $TMPFILE2 > $HEADERS
     
     # Create single line FASTA and change to specified case
     if [[ $singleline = 1 ]]
     then
+    echo "Converting to single line FASTA..."
     if [[ $lettercase = 0 ]]
     then
-     awk '/^>/ {printf("%s%s\t",(N>0?"\n":""),$0);N++;next;} {printf("%s",$0);}  END {printf("\n");}' $TMPFILE2
+     awk '/^>/ {printf((N>0?"\n":""));N++;next;} {printf("%s",$0);}  END {printf("\n");}' $TMPFILE2
     
     # Convert to upper-case
     elif [[ $lettercase = 1 ]]
      then
-      awk '/^>/ {printf("%s%s\t",(N>0?"\n":""),$0);N++;next;} {printf("%s",toupper($0));}  END {printf("\n");}' $TMPFILE2
+      awk '/^>/ {printf((N>0?"\n":""));N++;next;} {printf("%s",toupper($0));}  END {printf("\n");}' $TMPFILE2
 
     # Convert to lower-case
      elif [[ $lettercase = 2 ]]
       then
-       awk '/^>/ {printf("%s%s\t",(N>0?"\n":""),$0);N++;next;} {printf("%s",tolower($0));}  END {printf("\n");}' $TMPFILE2
+       awk '/^>/ {printf((N>0?"\n":""));N++;next;} {printf("%s",tolower($0));}  END {printf("\n");}' $TMPFILE2
     fi > $TMPFILE1
-    else
-     paste <(grep --perl-regexp ">" $TMPFILE2) <(grep --perl-regexp --invert-match ">" $TMPFILE2) > $TMPFILE1
-    fi
     
+    else
+     grep --perl-regexp --invert-match "^>" $TMPFILE2 > $TMPFILE1
+    fi
+     
      # Get complementary sequences
      if [[ $complement = 1 ]]
      then
-      awk '{print $1; system("echo "$2" | tr \"ATCGatcg\" \"TAGCtagc\"")}' $TMPFILE1 |
-      awk 'BEGIN {RS=">"} NR>1 {gsub("\n", "\t"); print ">"$0}' > $TMPFILE2
+     echo "Converting to complement sequence..."
+      cat $TMPFILE1 |
+      tr \"ATCGatcg\" \"TAGCtagc\" > $TMPFILE2
       cp --force $TMPFILE2 $TMPFILE1
      fi
      
      # Get reverse sequences
      if [[ $rev_seq = 1 ]]
      then
-      awk '{print $1; system("echo "$2" | rev")}' $TMPFILE1 |
-      awk 'BEGIN {RS=">"} NR>1 {gsub("\n", "\t"); print ">"$0}' > $TMPFILE2
+     echo "Converting to reverse sequence..."
+      rev $TMPFILE1 > $TMPFILE2
       cp --force $TMPFILE2 $TMPFILE1
      fi
      
      # Change frame
      if [[ $frame != 1 ]]
      then
-      awk -F $'\t' -v frame="$frame" '{OFS="\t"; print $1, substr($2,frame,length($2))}' $TMPFILE1 > $TMPFILE2
-      cp --force $TMPFILE2 $TMPFILE1
+      sed --in-place --regexp-extended 's/^.{'"$(($frame - 1))"'}//g' $TMPFILE1
      fi
      
      # Get sequence ORFs
@@ -406,85 +406,117 @@ do
      then
      get_orfs(){
      
+     orf_num=1
      local ORFstart=$1
      local ORFend=$2
+     local orf_core=$3
      local ORFFILE1=$(mktemp)
      local ORFFILE2=$(mktemp)
      local ORFFILE3=$(mktemp)
-     local HEADERS=$(mktemp)
+     local ORFHEADERS=$(mktemp)
+     local ORFHEADERS2=$(mktemp)
      
      if [[ $threads != 1 ]]
      then
-      sed -n ''"$ORFstart"','"$ORFend"'p;'"$(($ORFend + 1))"'q' $TMPFILE1 > $ORFFILE1
+      sed --quiet ''"$ORFstart"','"$ORFend"'p;'"$(($ORFend + 1))"'q' $TMPFILE1 > $ORFFILE1
+      sed --quiet ''"$ORFstart"','"$ORFend"'p;'"$(($ORFend + 1))"'q' $HEADERS > $ORFHEADERS
      else
       cp --force $TMPFILE1 $ORFFILE1
+      cp --force $HEADERS $ORFHEADERS
      fi
      
-      # Separate codons
-      paste <(awk -F $'\t' '{print $1}' $ORFFILE1) <(awk -F $'\t' '{print $2}' $ORFFILE1 |
-      awk -F '' '{for(i=1; i<=NF; i+=3) {printf "%s%s ", $i,$(i+1)$(i+2);}; print ""}') |
-      grep --ignore-case --perl-regexp "atg" > $ORFFILE2
-      cp --force $ORFFILE2 $ORFFILE1
-      
-      # Cut to first start codon
-      orf_num=1
-      awk -F $'\t' '{OFS="\t"; print $1, substr($2,match(tolower($2),"atg "))}' $ORFFILE1 > $ORFFILE3
-      awk -F $'\t' '{print $2}' $ORFFILE3 > $ORFFILE1
-      awk -F $'\t' '{print $1}' $ORFFILE3 > $HEADERS
-
-      # Output until first stop codon
-      paste <(awk -v orf_num="$orf_num" '{print $0"_orf"orf_num}' $HEADERS) <(awk -F $'\t' '{OFS="\t";
-      print substr($2,1,match(tolower($2),"ta[ag] |tga |$")+2)}' $ORFFILE3 |
-      tr -d " ") > $ORFFILE2
-
-      # Remove non-stop sequences
-      awk -F $'\t' '{if(match(tolower($0),"ta[ag] |tga ") > 0) print $0;
-        if(match(tolower($0),"ta[ag] |tga ") == 0) print ""}' $ORFFILE1 > $ORFFILE3
+      # Separate codons and cut to first start and stop codon
+      local orf_num=1
+      if [[ $(($orf_num % 5)) = 0 ]]
+       then
+        local core_arr=($(cat $core_ORF))
+        core_arr[$orf_core]="(core:"$orf_core")="$orf_num
+        echo ${core_arr[@]} > $core_ORF
+        echo -ne "Extracting ORF "$(cat $core_ORF)"\r"
+      fi
+      awk -F '' '{for(i=1; i<=NF; i+=3) {printf "%s%s ", $i,$(i+1)$(i+2);}; print ""}' $ORFFILE1 |
+      awk -F $'\t' '{if(match(tolower($0),"atg") > 0) print substr($0,match(tolower($0),"atg"));
+      if(match(tolower($0),"atg") == 0) print ""}' |
+      tee $ORFFILE3 |
+      awk -F $'\t' '{if(match(tolower($0),"ta[ag]|tga") > 0) print substr($0,1,match(tolower($0),"ta[ag]|tga")+2);
+      if(match(tolower($0),"ta[ag]|tga") == 0) print $0}' |
+      if [[ $translate = 1 ]]
+      then
+       translate |
+       sed --regexp-extended 's/[atcg]{1,}$//g' |
+       tr -d " " |
+       if [[ $min_prot = 1 ]]
+       then
+        awk -v min_prot_length="$min_prot_length" '{if(match($0,"*|$") - 1 >= min_prot_length) print $0;
+        if(match($0,"*|$") - 1 < min_prot_length) print ""}'
+       else
+        tr -d " "
+       fi
+      fi > $ORFFILE2
+      awk -F $'\t' -v orf_num="$orf_num" '{print $0"_orf"orf_num}' $ORFHEADERS >> $ORFHEADERS2
       cp --force $ORFFILE3 $ORFFILE1
 
       # Loop over other ORFs
-      while [[ $(grep --ignore-case --count --perl-regexp "atg " $ORFFILE1) != 0 ]]
+      while [[ $(grep --ignore-case --count "atg" $ORFFILE1) != 0 ]]
       do
       
-      orf_num=$(($orf_num + 1))
-
-       # Cut until first stop codon or until end of line
-       awk -F $'\t' '{print substr($0,match(tolower($0),"ta[ag] |tga |$")+4)}' $ORFFILE1 |
-        
-       # Cut until first start codon
-       awk -F $'\t' '{if(match(tolower($0),"atg ") > 0) print substr($0,match(tolower($0),"atg "));
-       if(match(tolower($0),"atg ") == 0) print ""}' > $ORFFILE3
+       orf_num=$(($orf_num + 1))
+       
+       if [[ $(($orf_num % 5)) = 0 ]]
+       then
+        local core_arr=($(cat $core_ORF))
+        core_arr[$orf_core]="(core:"$orf_core")="$orf_num
+        echo ${core_arr[@]} > $core_ORF
+        echo -ne "Extracting ORF "$(cat $core_ORF)"\r"
+      fi
+       : > $ORFFILE3
+       
+       # Cut until first start and stop codon or until end of line
+       awk -F $'\t' '{if(match(tolower($0),"ta[ag]|tga") > 0) print substr($0,match(tolower($0),"ta[ag]|tga")+4);
+       if(match(tolower($0),"ta[ag]|tga") == 0) print ""}' $ORFFILE1 |
+       tee $ORFFILE3 |
+       awk -F $'\t' '{if(match(tolower($0),"atg") > 0) print substr($0,match(tolower($0),"atg"));
+       if(match(tolower($0),"atg") == 0) print ""}' |
+       awk -F $'\t' '{if(match(tolower($0),"ta[ag]|tga") > 0) print substr($0,1,match(tolower($0),"ta[ag]|tga")+2);
+       if(match(tolower($0),"ta[ag]|tga") == 0) print ""}' |
+       if [[ $translate = 1 ]]
+       then
+        translate |
+        sed --regexp-extended 's/[atcg]{1,}$//g' |
+        tr -d " " |
+        if [[ $min_prot = 1 ]]
+        then
+         awk -v min_prot_length="$min_prot_length" '{if(match($0,"*|$") - 1 >= min_prot_length) print $0;
+         if(match($0,"*|$") - 1 < min_prot_length) print ""}'
+        else
+         tr -d " "
+        fi
+       fi >> $ORFFILE2
+       awk -F $'\t' -v orf_num="$orf_num" '{print $0"_orf"orf_num}' $ORFHEADERS >> $ORFHEADERS2
        cp --force $ORFFILE3 $ORFFILE1
        
-       paste $ORFFILE2 <(awk -v orf_num="$orf_num" '{print $0"_orf"orf_num}' $HEADERS) > $ORFFILE3
-       cp --force $ORFFILE3 $ORFFILE2
-       
-       # Join next ORF
-       paste $ORFFILE2 <(awk -F $'\t' '{OFS="\t";
-        print substr($0,1,match(tolower($0),"ta[ag] |tga |$")+2)}' $ORFFILE1 |
-        tr -d " ") > $ORFFILE3
-          
-         cp --force $ORFFILE3 $ORFFILE2
-         
-         # Remove non-stop sequences
-         awk -F $'\t' '{if(match(tolower($0),"ta[ag] |tga ") > 0) print $0;
-        if(match(tolower($0),"ta[ag] |tga ") == 0) print ""}' $ORFFILE1 > $ORFFILE3
-        cp --force $ORFFILE3 $ORFFILE1
       done
+
+      # local index=($(grep --line-number --invert-match --perl-regexp "^$" $ORFFILE2 | cut -d : -f 1 | tr "\n" " "))
+      # for ((k=0;k<=${#index[@]} - 1;k++))
+      # do
+      #  sed --quiet ''"${index[$k]}"'p' $ORFHEADERS >> $HEADERS_TMP
+      #  sed --quiet ''"${index[$k]}"'p' $ORFFILE2 >> $TMPFILE2
+      # done
       
-      sed --regexp-extended 's/\t{1,}/\t/g; s/\t$//g' $ORFFILE2 |
-      sed --regexp-extended 's/\t>/\n>/g' |
-      grep --perl-regexp "\t" >> $TMPFILE2
+      cp --force $ORFHEADERS2 $HEADERS_TMP
+      cp --force $ORFFILE2 $TMPFILE2
       
       # Cleanup
       rm --force $ORFFILE1
       rm --force $ORFFILE2
       rm --force $ORFFILE3
-      rm --force $HEADERS
+      rm --force $ORFHEADERS
+      rm --force $ORFHEADERS2
      }
      
      # Allocate sequences to requested threads
-     seq_num=$(grep -cP "^>" $TMPFILE1)
+     seq_num=$(grep --count ">" $HEADERS)
      if [[ $seq_num -lt $threads ]]
      then
       threads=$seq_num
@@ -496,7 +528,7 @@ do
      
      start=1
      end=()
-     for ((core=0;core <= $(($threads- 1));core++))
+     for ((core=0;core <= $(($threads - 1));core++))
      do
       if [[ ${#end[@]} != 0 ]]
       then
@@ -511,10 +543,13 @@ do
      done
      
      # Loop for function getting ORFs for multithreading
+     echo "Using "$threads" threads..."
+     core_ORF=$(mktemp)
+     HEADERS_TMP=$(mktemp)
      : > $TMPFILE2
      for ((core=0;core <= $(($threads - 1));core++))
      do
-      get_orfs ${start[$core]} ${end[$core]} &
+      get_orfs ${start[$core]} ${end[$core]} $core &
       pids[$core]=$!
      done
      
@@ -522,27 +557,18 @@ do
      do
       wait $pid
      done
-     
-     if [[ $threads -gt 1 ]]
-     then
-      HEADERS=$(mktemp)
-      awk '{print $1}' $TMPFILE1 > $HEADERS
-      : > $TMPFILE1
-      while read LINE
-      do
-      grep "$LINE" "$TMPFILE2" >> "$TMPFILE1"
-      done < "$HEADERS"
-     else
-      cp --force $TMPFILE2 $TMPFILE1
-     fi
+     echo ""
+     cp --force $HEADERS_TMP $HEADERS
+     cp --force $TMPFILE2 $TMPFILE1
+     rm --force $core_ORF
+     rm --force $HEADERS_TMP
     fi
     
-    if [[ $translate = 1 ]]
+    if [[ $translate = 1 && $orf = 0 ]]
     then
-    
+    echo "Translating..."
     # Separate to codons and translate
-     paste <(awk -F $'\t' '{print $1}' $TMPFILE1) <(awk -F $'\t' '{print $2}' $TMPFILE1 |
-      awk -F '' '{for(i=1; i<=NF; i+=3) {printf "%s%s ", $i,$(i+1)$(i+2);}; print ""}' |
+      awk -F '' '{for(i=1; i<=NF; i+=3) {printf "%s%s ", $i,$(i+1)$(i+2);}; print ""}' $TMPFILE1 |
       translate |
        sed --regexp-extended 's/[atcg]{1,}$//g' |
        tr -d " " |
@@ -554,20 +580,25 @@ do
         if(match($0,"*|$") - 1 < min_prot_length) print ""}'
        else
         cat
-       fi) |
-       grep --perl-regexp "\t." > $TMPFILE2
+       fi > $TMPFILE2
       cp --force $TMPFILE2 $TMPFILE1
     fi
     
      # GC content
      if [[ $percent_GC = 1 ]]
      then
-      awk -F $'\t' '{OFS="\t"; var=length($2);gsub("[AaTt]","",$2);print $1,length($2)/var*100}' $TMPFILE1
+     echo "Calculating %GC..."
+      awk '{var=length($0);gsub("[AaTt]","",$0);print length($0)/var*100}' $TMPFILE1
       exit 0
      fi
+     
+     paste $HEADERS $TMPFILE1 | grep --perl-regexp --invert-match "\t$" > $TMPFILE2
+     cp --force $TMPFILE2 $TMPFILE1
+     
      # Sort by name
      if [[ $name_sort = 1 ]]
      then
+     echo "Sorting by name..."
       if [[ $reverse_sort = 1 ]]
       then
        sort --reverse --field-separator=$'\t' --key=1 $TMPFILE1 > $TMPFILE2
@@ -580,6 +611,7 @@ do
     # Sort by sequence length
      if [[ $length_sort = 1 ]]
      then
+     echo "Sorting by length..."
       awk '{print length, $0}' $TMPFILE1 |
       if [[ $reverse_sort = 1 ]]
       then
