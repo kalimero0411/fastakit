@@ -70,7 +70,7 @@ do
   -o | --out)
   out=1 # Output to file
   shift
-  outfile=$1
+  output_file=$1
   shift
   ;;
   -n | --name_sort)
@@ -323,117 +323,100 @@ do
    translate=0
   fi
   
-  # Verbose output
-    if [[ $verbose = 1 ]]
-    then
-    if [[ $singleline = 1 ]]; then echo "Write in single-line FASTA"; fi
-    if [[ $name_sort = 1 ]]; then echo "Sort by name"; fi
-    if [[ $length_sort = 1 ]]; then echo "Sort by length"; fi
-    if [[ $reverse_sort = 1 ]]; then echo "Sort in reverse order"; fi
-    if [[ $lettercase = 1 ]]; then echo "Change to UPPERCASE"; fi
-    if [[ $lettercase = 2 ]]; then echo "Change to lowercase"; fi
-    if [[ $complement = 1 ]]; then echo "Change to complement sequence"; fi
-    if [[ $rev_seq = 1 ]]; then echo "Change to reverse sequence"; fi
-    if [[ $orf = 1 ]]; then echo "ORF | frame "$frame; fi
-    if [[ $translate = 1 ]]; then echo "Translate | frame "$frame; fi
-    if [[ $translate_table != 1 ]]; then echo "Translation code: "$translate_table; fi
-    if [[ $min_prot = 1 ]]; then echo "Minimum protein length: "$min_prot_length; fi
-    if [[ $percent_GC = 1 ]]; then echo "Percent GC"; fi
-    if [[ $out = 1 ]]; then echo $(basename $file)" ---> "$outfile; fi
-    fi
-    
     # Create temp files
     HEADERS=$(mktemp)
-    TMPFILE1=$(mktemp)
-    TMPFILE2=$(mktemp)
+    INFILE=$(mktemp)
+    OUTFILE=$(mktemp)
     
     # Read from file or stdin
     while read input
      do
       echo "$input"
      done < "${1:-/dev/stdin}" |
-     sed --regexp-extended 's/\r//g' > $TMPFILE2
-     grep --perl-regexp "^>" $TMPFILE2 > $HEADERS
+     sed --regexp-extended 's/\r//g' > $INFILE
+     grep --perl-regexp "^>" $INFILE > $HEADERS
     
     # Create single line FASTA and change to specified case
     if [[ $singleline = 1 ]]
     then
-    echo "Converting to single line FASTA..."
     if [[ $lettercase = 0 ]]
     then
-     awk '/^>/ {printf((N>0?"\n":""));N++;next;} {printf("%s",$0);}  END {printf("\n");}' $TMPFILE2
+     if [[ $verbose = 1 ]]; then echo "Converting to single line FASTA..."; fi
+     awk '/^>/ {printf((N>0?"\n":""));N++;next;} {printf("%s",$0);}  END {printf("\n");}' $INFILE
     
     # Convert to upper-case
     elif [[ $lettercase = 1 ]]
      then
-      awk '/^>/ {printf((N>0?"\n":""));N++;next;} {printf("%s",toupper($0));}  END {printf("\n");}' $TMPFILE2
+      if [[ $verbose = 1 ]]; then echo "Converting to upper-case single line FASTA..."; fi
+      awk '/^>/ {printf((N>0?"\n":""));N++;next;} {printf("%s",toupper($0));}  END {printf("\n");}' $INFILE
 
     # Convert to lower-case
      elif [[ $lettercase = 2 ]]
       then
-       awk '/^>/ {printf((N>0?"\n":""));N++;next;} {printf("%s",tolower($0));}  END {printf("\n");}' $TMPFILE2
-    fi > $TMPFILE1
-    
+       if [[ $verbose = 1 ]]; then echo "Converting to lower-case single line FASTA..."; fi
+       awk '/^>/ {printf((N>0?"\n":""));N++;next;} {printf("%s",tolower($0));}  END {printf("\n");}' $INFILE
+    fi > $OUTFILE
     else
-     grep --perl-regexp --invert-match "^>" $TMPFILE2 > $TMPFILE1
+     grep --perl-regexp --invert-match "^>" $INFILE > $OUTFILE
     fi
      
      # Get complementary sequences
      if [[ $complement = 1 ]]
      then
-     echo "Converting to complement sequence..."
-      cat $TMPFILE1 |
-      tr \"ATCGatcg\" \"TAGCtagc\" > $TMPFILE2
-      cp --force $TMPFILE2 $TMPFILE1
+     SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
+     if [[ $verbose = 1 && $complement = 1 ]]; then echo "Converting to complement sequence..."; fi
+     #cat $TMPFILE1 | tr \"ATCGatcg\" \"TAGCtagc\" > $TMPFILE2
+      parallel -a $INFILE -j"$threads" --block 30M --pipe-part 'tr \"ATCGatcg\" \"TAGCtagc\"' > $OUTFILE
      fi
      
      # Get reverse sequences
      if [[ $rev_seq = 1 ]]
      then
-     echo "Converting to reverse sequence..."
-      rev $TMPFILE1 > $TMPFILE2
-      cp --force $TMPFILE2 $TMPFILE1
+     SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
+     if [[ $verbose = 1 && $rev_seq = 1 ]]; then echo "Converting to reverse sequence..."; fi
+      rev $INFILE > $OUTFILE
      fi
      
      # Change frame
      if [[ $frame != 1 ]]
      then
-      sed --in-place --regexp-extended 's/^.{'"$(($frame - 1))"'}//g' $TMPFILE1
+      sed --in-place --regexp-extended 's/^.{'"$(($frame - 1))"'}//g' $INFILE
      fi
      
      # Get sequence ORFs
      if [[ $orf = 1 ]]
      then
+     SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
      get_orfs(){
      
-     orf_num=1
+     local SWITCH
      local ORFstart=$1
      local ORFend=$2
      local orf_core=$3
-     local ORFFILE1=$(mktemp)
      local ORFFILE2=$(mktemp)
      local ORFFILE3=$(mktemp)
-     local ORFHEADERS=$(mktemp)
      local ORFHEADERS2=$(mktemp)
      
      if [[ $threads != 1 ]]
      then
-      sed --quiet ''"$ORFstart"','"$ORFend"'p;'"$(($ORFend + 1))"'q' $TMPFILE1 > $ORFFILE1
+      local ORFFILE1=$(mktemp)
+      local ORFHEADERS=$(mktemp)
+      sed --quiet ''"$ORFstart"','"$ORFend"'p;'"$(($ORFend + 1))"'q' $INFILE > $ORFFILE1
       sed --quiet ''"$ORFstart"','"$ORFend"'p;'"$(($ORFend + 1))"'q' $HEADERS > $ORFHEADERS
      else
-      cp --force $TMPFILE1 $ORFFILE1
-      cp --force $HEADERS $ORFHEADERS
+      local ORFFILE1=$INFILE
+      local ORFHEADERS=$HEADERS
      fi
      
       # Separate codons and cut to first start and stop codon
       local orf_num=1
-      if [[ $(($orf_num % 5)) = 0 ]]
-       then
-        local core_arr=($(cat $core_ORF))
-        core_arr[$orf_core]="(core:"$orf_core")="$orf_num
-        echo ${core_arr[@]} > $core_ORF
-        echo -ne "Extracting ORF "$(cat $core_ORF)"\r"
-      fi
+      #if [[ $(($orf_num % 5)) = 0 ]]
+      # then
+      #  local core_arr=($(cat $core_ORF))
+      #  core_arr[$orf_core]="(core:"$orf_core")="$orf_num
+      #  echo ${core_arr[@]} > $core_ORF
+      #  echo -ne "Extracting ORF "$(cat $core_ORF)"\r"
+      #fi
       awk -F '' '{for(i=1; i<=NF; i+=3) {printf "%s%s ", $i,$(i+1)$(i+2);}; print ""}' $ORFFILE1 |
       awk -F $'\t' '{if(match(tolower($0),"atg") > 0) print substr($0,match(tolower($0),"atg"));
       if(match(tolower($0),"atg") == 0) print ""}' |
@@ -450,8 +433,10 @@ do
         awk -v min_prot_length="$min_prot_length" '{if(match($0,"*|$") - 1 >= min_prot_length) print $0;
         if(match($0,"*|$") - 1 < min_prot_length) print ""}'
        else
-        tr -d " "
+        cat
        fi
+      else
+       tr -d " "
       fi > $ORFFILE2
       awk -F $'\t' -v orf_num="$orf_num" '{print $0"_orf"orf_num}' $ORFHEADERS >> $ORFHEADERS2
       cp --force $ORFFILE3 $ORFFILE1
@@ -462,13 +447,13 @@ do
       
        orf_num=$(($orf_num + 1))
        
-       if [[ $(($orf_num % 5)) = 0 ]]
-       then
-        local core_arr=($(cat $core_ORF))
-        core_arr[$orf_core]="(core:"$orf_core")="$orf_num
-        echo ${core_arr[@]} > $core_ORF
-        echo -ne "Extracting ORF "$(cat $core_ORF)"\r"
-      fi
+       #if [[ $(($orf_num % 5)) = 0 ]]
+       #then
+       # local core_arr=($(cat $core_ORF))
+       # core_arr[$orf_core]="(core:"$orf_core")="$orf_num
+       # echo ${core_arr[@]} > $core_ORF
+       # echo -ne "Extracting ORF "$(cat $core_ORF)"\r"
+      #fi
        : > $ORFFILE3
        
        # Cut until first start and stop codon or until end of line
@@ -489,29 +474,28 @@ do
          awk -v min_prot_length="$min_prot_length" '{if(match($0,"*|$") - 1 >= min_prot_length) print $0;
          if(match($0,"*|$") - 1 < min_prot_length) print ""}'
         else
-         tr -d " "
+         cat
         fi
+       else
+        tr -d " "
        fi >> $ORFFILE2
        awk -F $'\t' -v orf_num="$orf_num" '{print $0"_orf"orf_num}' $ORFHEADERS >> $ORFHEADERS2
        cp --force $ORFFILE3 $ORFFILE1
        
       done
-
-      # local index=($(grep --line-number --invert-match --perl-regexp "^$" $ORFFILE2 | cut -d : -f 1 | tr "\n" " "))
-      # for ((k=0;k<=${#index[@]} - 1;k++))
-      # do
-      #  sed --quiet ''"${index[$k]}"'p' $ORFHEADERS >> $HEADERS_TMP
-      #  sed --quiet ''"${index[$k]}"'p' $ORFFILE2 >> $TMPFILE2
-      # done
       
-      cp --force $ORFHEADERS2 $HEADERS_TMP
-      cp --force $ORFFILE2 $TMPFILE2
+      cat $ORFHEADERS2 >> $HEADERS_TMP
+      cat $ORFFILE2 >> $OUTFILE
       
       # Cleanup
+      if [[ $threads != 1 ]]
+      then
       rm --force $ORFFILE1
+      rm --force $ORFHEADERS
+      fi
+      
       rm --force $ORFFILE2
       rm --force $ORFFILE3
-      rm --force $ORFHEADERS
       rm --force $ORFHEADERS2
      }
      
@@ -543,10 +527,14 @@ do
      done
      
      # Loop for function getting ORFs for multithreading
-     echo "Using "$threads" threads..."
+     if [[ $verbose = 1 && $orf = 1 ]]; then echo "ORF | frame "$frame; fi
+     if [[ $verbose = 1 && $translate = 1 ]]; then echo "Translate | frame "$frame; fi
+     if [[ $verbose = 1 && $translate_table != 1 ]]; then echo "Translation code: "$translate_table; fi
+     if [[ $verbose = 1 && $min_prot = 1 ]]; then echo "Minimum protein length: "$min_prot_length; fi
+     if [[ $verbose = 1 ]]; then echo "Using "$threads" threads..."; fi
      core_ORF=$(mktemp)
      HEADERS_TMP=$(mktemp)
-     : > $TMPFILE2
+     : > $OUTFILE
      for ((core=0;core <= $(($threads - 1));core++))
      do
       get_orfs ${start[$core]} ${end[$core]} $core &
@@ -557,18 +545,20 @@ do
      do
       wait $pid
      done
-     echo ""
-     cp --force $HEADERS_TMP $HEADERS
-     cp --force $TMPFILE2 $TMPFILE1
+     rm --force $HEADERS
+     HEADERS=$HEADERS_TMP
      rm --force $core_ORF
-     rm --force $HEADERS_TMP
+     
     fi
     
     if [[ $translate = 1 && $orf = 0 ]]
     then
-    echo "Translating..."
+    SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
+    if [[ $verbose = 1 && $translate = 1 ]]; then echo "Translate | frame "$frame; fi
+    if [[ $verbose = 1 && $translate_table != 1 ]]; then echo "Translation code: "$translate_table; fi
+    if [[ $verbose = 1 && $min_prot = 1 ]]; then echo "Minimum protein length: "$min_prot_length; fi
     # Separate to codons and translate
-      awk -F '' '{for(i=1; i<=NF; i+=3) {printf "%s%s ", $i,$(i+1)$(i+2);}; print ""}' $TMPFILE1 |
+      awk -F '' '{for(i=1; i<=NF; i+=3) {printf "%s%s ", $i,$(i+1)$(i+2);}; print ""}' $INFILE |
       translate |
        sed --regexp-extended 's/[atcg]{1,}$//g' |
        tr -d " " |
@@ -580,63 +570,66 @@ do
         if(match($0,"*|$") - 1 < min_prot_length) print ""}'
        else
         cat
-       fi > $TMPFILE2
-      cp --force $TMPFILE2 $TMPFILE1
+       fi > $OUTFILE
     fi
     
      # GC content
      if [[ $percent_GC = 1 ]]
      then
-     echo "Calculating %GC..."
-      awk '{var=length($0);gsub("[AaTt]","",$0);print length($0)/var*100}' $TMPFILE1
+     SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
+     if [[ $verbose = 1 && $percent_GC = 1 ]]; then echo "Percent GC"; fi
+      awk '{var=length($0);gsub("[AaTt]","",$0);print length($0)/var*100}' $INFILE
       exit 0
      fi
      
-     paste $HEADERS $TMPFILE1 | grep --perl-regexp --invert-match "\t$" > $TMPFILE2
-     cp --force $TMPFILE2 $TMPFILE1
-     
+     SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
+     paste $HEADERS $INFILE | grep --perl-regexp --invert-match "\t$" > $OUTFILE
+
      # Sort by name
      if [[ $name_sort = 1 ]]
      then
-     echo "Sorting by name..."
+     SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
+      if [[ $verbose = 1 && $name_sort = 1 ]]; then echo "Sort by name"; fi
+      if [[ $verbose = 1 && $reverse_sort = 1 ]]; then echo "Sort in reverse order"; fi
       if [[ $reverse_sort = 1 ]]
       then
-       sort --reverse --field-separator=$'\t' --key=1 $TMPFILE1 > $TMPFILE2
+       sort --reverse --field-separator=$'\t' --key=1 $INFILE > $OUTFILE
       else
-       sort --field-separator=$'\t' --key=1 $TMPFILE1 > $TMPFILE2
+       sort --field-separator=$'\t' --key=1 $INFILE > $OUTFILE
       fi
-      cp --force $TMPFILE2 $TMPFILE1
      fi
     
     # Sort by sequence length
      if [[ $length_sort = 1 ]]
      then
-     echo "Sorting by length..."
-      awk '{print length, $0}' $TMPFILE1 |
+     SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
+     if [[ $verbose = 1 && $length_sort = 1 ]]; then echo "Sort by length"; fi
+     if [[ $verbose = 1 && $reverse_sort = 1 ]]; then echo "Sort in reverse order"; fi
+      awk '{print length, $0}' $INFILE |
       if [[ $reverse_sort = 1 ]]
       then
        sort --numeric-sort --reverse
       else
        sort --numeric-sort
       fi |
-      cut --delimiter=" " --fields=2- > $TMPFILE2
-      cp --force $TMPFILE2 $TMPFILE1
+      cut --delimiter=" " --fields=2- > $OUTFILE
      fi
      
      # Convert tabbed to FASTA and remove empty headers
-     cat $TMPFILE1 |
-     tr "\t" "\n" > $TMPFILE2
-     cp --force $TMPFILE2 $TMPFILE1
+     SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
+     cat $INFILE |
+     tr "\t" "\n" > $OUTFILE
      
         
     # Output to file or stdout
     if [[ $out = 1 ]]
     then
-     cp --force $TMPFILE1 $outfile
+     if [[ $verbose = 1 && $out = 1 ]]; then echo $(basename $file)" ---> "$output_file; fi
+     cp --force $OUTFILE $output_file
     else
-     cat $TMPFILE1
+     cat $OUTFILE
     fi
     
-    rm --force $TMPFILE1
-    rm --force $TMPFILE2
+    rm --force $INFILE
+    rm --force $OUTFILE
     rm --force $HEADERS
