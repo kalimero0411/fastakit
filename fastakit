@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-
+#set -x
 # Default parameters
 singleline=1
 out=0
@@ -18,8 +18,9 @@ translate_table=1
 percent_GC=0
 verbose=0
 help=0
+time_start=$(date +%s)
 
-print_usage(){
+function print_usage(){
  printf "
 fastakit [OPTIONS] FASTA_file.fasta
 	-o | --out	Output to file (otherwise to stdout)
@@ -45,14 +46,8 @@ fastakit [OPTIONS] FASTA_file.fasta
 "
 }
 
-# Error function
-error_exit(){
-	echo "$1" 1>&2
-	exit 1
-}
-
 # Alternative tables
-tables(){
+function tables(){
 printf "
 	Available translation codes:
 	1 - Standard code
@@ -155,166 +150,115 @@ do
   esac
   done
   
-  # Translation functions
-  # Standard code
-  if [[ $translate_table = 1 ]]
-  then
-  translate(){
-	while read seq; do \
-	echo $seq |
-	awk '{print tolower($0)}' |
-	sed --regexp-extended \
-     's/atg/M/g;
-      s/at[tca]/I/g;
-      s/ac[actg]/T/g;
-      s/aa[tc]/N/g;
-      s/aa[ag]/K/g;
-      s/ag[tc]/S/g;
-      s/ag[ag]/R/g;
-      s/tt[tc]/F/g;
-      s/tt[ag]/L/g;
-      s/tc[acgt]/S/g;
-      s/ta[tc]/Y/g;
-      s/ta[ag]/*/g;
-      s/tg[tc]/C/g;
-      s/tga/*/g;
-      s/tgg/W/g;
-      s/ct[acgt]/L/g;
-      s/cc[acgt]/P/g;
-      s/ca[tc]/H/g;
-      s/ca[ag]/Q/g;
-      s/cg[acgt]/R/g;
-      s/gt[acgt]/V/g;
-      s/gc[acgt]/A/g;
-      s/ga[tc]/D/g;
-      s/ga[ag]/E/g;
-      s/gg[acgt]/G/g' \
-      ;done
+  # Time function
+  function show_time () {
+    num=$1
+    min=0
+    hour=0
+    day=0
+    if((num>59));then
+        ((sec=num%60))
+        ((num=num/60))
+        if((num>59));then
+            ((min=num%60))
+            ((num=num/60))
+            if((num>23));then
+                ((hour=num%24))
+                ((day=num/24))
+            else
+                ((hour=num))
+            fi
+        else
+            ((min=num))
+        fi
+    else
+        ((sec=num))
+    fi
+    echo "$day"d "$hour"h "$min"m "$sec"s > /dev/tty
 }
-  fi
-  
-  # Vertebrate mitochondrial code
-  if [[ $translate_table = 2 ]]
-  then
-  translate(){
-	while read seq; do \
-	echo $seq |
-	awk '{print tolower($0)}' |
-	sed --regexp-extended \
-     's/at[ag]/M/g;
-      s/at[tc]/I/g;
-      s/ac[actg]/T/g;
-      s/aa[tc]/N/g;
-      s/aa[ag]/K/g;
-      s/ag[tc]/S/g;
-      s/ag[ag]/*/g;
-      s/tt[tc]/F/g;
-      s/tt[ag]/L/g;
-      s/tc[acgt]/S/g;
-      s/ta[tc]/Y/g;
-      s/ta[ag]/*/g;
-      s/tg[tc]/C/g;
-      s/tg[ag]/W/g;
-      s/ct[acgt]/L/g;
-      s/cc[acgt]/P/g;
-      s/ca[tc]/H/g;
-      s/ca[ag]/Q/g;
-      s/cg[acgt]/R/g;
-      s/gt[acgt]/V/g;
-      s/gc[acgt]/A/g;
-      s/ga[tc]/D/g;
-      s/ga[ag]/E/g;
-      s/gg[acgt]/G/g' \
-      ;done
-}
-  fi
 
-  # Yeast mitochondrial code
-  if [[ $translate_table = 3 ]]
-  then
-  translate(){
-	while read seq; do \
+  # Translation function
+  function translate(){
+	while read seq
+	do
 	echo $seq |
-	awk '{print tolower($0)}' |
+	awk '{print tolower($0)}' | 
 	sed --regexp-extended \
-     's/at[ag]/M/g;
-      s/at[tc]/I/g;
-      s/ac[actg]/T/g;
-      s/aa[tc]/N/g;
-      s/aa[ag]/K/g;
-      s/ag[tc]/S/g;
-      s/ag[ag]/R/g;
-      s/tt[tc]/F/g;
-      s/tt[ag]/L/g;
-      s/tc[acgt]/S/g;
-      s/ta[tc]/Y/g;
-      s/ta[ag]/*/g;
-      s/tg[tc]/C/g;
-      s/tg[ag]/W/g;
-      s/ct[acgt]/T/g;
-      s/cc[acgt]/P/g;
-      s/ca[tc]/H/g;
-      s/ca[ag]/Q/g;
-      s/cg[gt]/R/g;
-      s/gt[acgt]/V/g;
-      s/gc[acgt]/A/g;
-      s/ga[tc]/D/g;
-      s/ga[ag]/E/g;
-      s/gg[acgt]/G/g;
-      s/cg[ac]/X/g' \
-      ;done
+        's/atg/M/g;
+         s/at[tc]/I/g;
+         s/ac[actg]/T/g;
+         s/aa[tc]/N/g;
+         s/aa[ag]/K/g;
+         s/ag[tc]/S/g;
+         s/tt[tc]/F/g;
+         s/tt[ag]/L/g;
+         s/tc[acgt]/S/g;
+         s/ta[tc]/Y/g;
+         s/ta[ag]/*/g;
+         s/tg[tc]/C/g;
+         s/tgg/W/g;
+         s/cc[acgt]/P/g;
+         s/ca[tc]/H/g;
+         s/ca[ag]/Q/g;
+         s/cg[gt]/R/g;
+         s/gt[acgt]/V/g;
+         s/gc[acgt]/A/g;
+         s/ga[tc]/D/g;
+         s/ga[ag]/E/g;
+         s/gg[acgt]/G/g' |
+         
+         # Standard code
+         if [[ $translate_table = 1 ]]
+         then
+          sed --regexp-extended \
+           's/ata/I/g;
+            s/ag[ag]/R/g;
+            s/ct[acgt]/L/g;
+            s/cg[ac]/R/g;
+            s/tga/*/g;'
+       
+         # Vertebrate mitochondrial code
+         elif [[ $translate_table = 2 ]]
+         then
+          sed --regexp-extended \
+           's/ata/M/g;
+            s/ag[ag]/*/g;
+            s/ct[acgt]/L/g;
+            s/cg[ac]/R/g;
+            s/tga/W/g;'
+       
+         # Yeast mitochondrial code
+         elif [[ $translate_table = 3 ]]
+          then
+          sed --regexp-extended \
+           's/ata/M/g;
+            s/ag[ag]/R/g;
+            s/ct[acgt]/T/g;
+            s/cg[ac]/X/g;
+            s/tga/W/g;'
+       
+         # Mold, protozoan, and coelenterate mitochondrial code and the mycoplasma/spiroplasma code
+         elif [[ $translate_table = 4 ]]
+          then
+           sed --regexp-extended \
+            's/ata/I/g;
+             s/ag[ag]/R/g;
+             s/ct[acgt]/L/g;
+             s/cg[ac]/R/g;
+             s/tga/M/g;'
+          else
+           echo "Error: Unknown translation code"
+           tables
+           exit 1
+         fi
+     done
 }
-  fi
-  
-  # Mold, protozoan, and coelenterate mitochondrial code and the mycoplasma/spiroplasma code
-  if [[ $translate_table = 4 ]]
-  then
-  translate(){
-	while read seq; do \
-	echo $seq |
-	awk '{print tolower($0)}' |
-	sed --regexp-extended \
-     's/atg/M/g;
-      s/at[tca]/I/g;
-      s/ac[actg]/T/g;
-      s/aa[tc]/N/g;
-      s/aa[ag]/K/g;
-      s/ag[tc]/S/g;
-      s/ag[ag]/R/g;
-      s/tt[tc]/F/g;
-      s/tt[ag]/L/g;
-      s/tc[acgt]/S/g;
-      s/ta[tc]/Y/g;
-      s/ta[ag]/*/g;
-      s/tg[tc]/C/g;
-      s/tg[ag]/W/g;
-      s/ct[acgt]/L/g;
-      s/cc[acgt]/P/g;
-      s/ca[tc]/H/g;
-      s/ca[ag]/Q/g;
-      s/cg[acgt]/R/g;
-      s/gt[acgt]/V/g;
-      s/gc[acgt]/A/g;
-      s/ga[tc]/D/g;
-      s/ga[ag]/E/g;
-      s/gg[acgt]/G/g' \
-      ;done
-}
-  fi
   
   # Frame exception
   if [[ $frame < 1 || $frame > 3 ]]
   then
    echo "Frame value must be 1, 2 or 3"
    print_usage
-   exit 1
-  fi
-  
-  # Table exception
-  if [[ $translate_table < 1 || $translate_table > 4 ]]
-  then
-   echo "Error: Unknown translation code"
-   tables
    exit 1
   fi
   
@@ -328,53 +272,59 @@ do
     INFILE=$(mktemp)
     OUTFILE=$(mktemp)
     
-    # Read from file or stdin
-    while read input
-     do
-      echo "$input"
-     done < "${1:-/dev/stdin}" |
-     sed --regexp-extended 's/\r//g' > $INFILE
-     grep --perl-regexp "^>" $INFILE > $HEADERS
-    
+    if [[ $verbose = 1 ]]; then echo "Using "$threads" thread(s)..." > /dev/tty; fi
+
     # Create single line FASTA and change to specified case
+    if [[ $verbose = 1 ]]; then
+    if [[ $singleline = 1 ]]; then
+    if [[ $lettercase = 0 ]]; then echo "Converting to single line FASTA..." > /dev/tty
+     elif [[ $lettercase = 1 ]]; then echo "Converting to upper-case single line FASTA..." > /dev/tty
+     elif [[ $lettercase = 2 ]]; then echo "Converting to lower-case single line FASTA..." > /dev/tty
+    fi
+    else
+     echo "Skipping single line FASTA conversion..." > /dev/tty
+    fi
+    fi
+    
     if [[ $singleline = 1 ]]
     then
     if [[ $lettercase = 0 ]]
     then
-     if [[ $verbose = 1 ]]; then echo "Converting to single line FASTA..."; fi
-     awk '/^>/ {printf((N>0?"\n":""));N++;next;} {printf("%s",$0);}  END {printf("\n");}' $INFILE
+     parallel -a "${1:-/dev/stdin}" -k -j"$threads" --block 30M --pipe-part 'grep --perl-regexp "^>"' > $HEADERS &
+     #perl -pe '$. > 1 and /^>/ ? print "\n" : chomp' "${1:-/dev/stdin}" | grep --perl-regexp --invert-match "^>" 
+     awk '/^>/ {printf((N>0?"\n":""));N++;next;} {printf("%s",$0);}  END {printf("\n");}' "${1:-/dev/stdin}" > $OUTFILE
     
     # Convert to upper-case
     elif [[ $lettercase = 1 ]]
      then
-      if [[ $verbose = 1 ]]; then echo "Converting to upper-case single line FASTA..."; fi
-      awk '/^>/ {printf((N>0?"\n":""));N++;next;} {printf("%s",toupper($0));}  END {printf("\n");}' $INFILE
+     parallel -a "${1:-/dev/stdin}" -k -j"$threads" --block 30M --pipe-part 'grep --perl-regexp "^>"' > $HEADERS &
+      awk '/^>/ {printf((N>0?"\n":""));N++;next;} {printf("%s",toupper($0));}  END {printf("\n");}' "${1:-/dev/stdin}" > $OUTFILE
 
     # Convert to lower-case
      elif [[ $lettercase = 2 ]]
       then
-       if [[ $verbose = 1 ]]; then echo "Converting to lower-case single line FASTA..."; fi
-       awk '/^>/ {printf((N>0?"\n":""));N++;next;} {printf("%s",tolower($0));}  END {printf("\n");}' $INFILE
-    fi > $OUTFILE
+      parallel -a "${1:-/dev/stdin}" -k -j"$threads" --block 30M --pipe-part 'grep --perl-regexp "^>"' > $HEADERS &
+       awk '/^>/ {printf((N>0?"\n":""));N++;next;} {printf("%s",tolower($0));}  END {printf("\n");}' "${1:-/dev/stdin}" > $OUTFILE
+    fi
     else
-     grep --perl-regexp --invert-match "^>" $INFILE > $OUTFILE
+     parallel -a "${1:-/dev/stdin}" -k -j"$threads" --block 30M --pipe-part 'grep --perl-regexp "^>"'  > $HEADERS &
+     parallel -a "${1:-/dev/stdin}" -k -j"$threads" --block 30M --pipe-part 'grep --perl-regexp --invert-match "^>"' > $OUTFILE
     fi
      
      # Get complementary sequences
+     if [[ $verbose = 1 && $complement = 1 ]]; then echo "Converting to complement sequence..." > /dev/tty; fi
      if [[ $complement = 1 ]]
      then
      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
-     if [[ $verbose = 1 && $complement = 1 ]]; then echo "Converting to complement sequence..."; fi
-     #cat $TMPFILE1 | tr \"ATCGatcg\" \"TAGCtagc\" > $TMPFILE2
-      parallel -a $INFILE -j"$threads" --block 30M --pipe-part 'tr \"ATCGatcg\" \"TAGCtagc\"' > $OUTFILE
+      parallel -a $INFILE -k -j"$threads" --block 30M --pipe-part 'tr \"ATCGatcg\" \"TAGCtagc\"' > $OUTFILE
      fi
      
      # Get reverse sequences
+     if [[ $verbose = 1 && $rev_seq = 1 ]]; then echo "Converting to reverse sequence..." > /dev/tty; fi     
      if [[ $rev_seq = 1 ]]
      then
      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
-     if [[ $verbose = 1 && $rev_seq = 1 ]]; then echo "Converting to reverse sequence..."; fi
-      rev $INFILE > $OUTFILE
+      parallel -a $INFILE -k -j"$threads" --block 30M --pipe-part 'rev' > $OUTFILE
      fi
      
      # Change frame
@@ -384,10 +334,16 @@ do
      fi
      
      # Get sequence ORFs
+     if [[ $verbose = 1 && $orf = 1 ]]; then echo "ORF | frame "$frame > /dev/tty; fi
+     if [[ $verbose = 1 && $translate = 1 ]]; then echo "Translate | frame "$frame > /dev/tty; fi
+     if [[ $verbose = 1 && $translate_table != 1 ]]; then echo "Translation code: "$translate_table > /dev/tty; fi
+     if [[ $verbose = 1 && $min_prot = 1 ]]; then echo "Minimum protein length: "$min_prot_length > /dev/tty; fi
+
+     
      if [[ $orf = 1 ]]
      then
      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
-     get_orfs(){
+     function get_orfs(){
      
      local SWITCH
      local ORFstart=$1
@@ -438,8 +394,8 @@ do
       else
        tr -d " "
       fi > $ORFFILE2
-      awk -F $'\t' -v orf_num="$orf_num" '{print $0"_orf"orf_num}' $ORFHEADERS >> $ORFHEADERS2
-      cp --force $ORFFILE3 $ORFFILE1
+      awk -F $'\t' -v orf_num="$orf_num" '{print $0"_orf"orf_num}' $ORFHEADERS > $ORFHEADERS2
+      SWITCH=$ORFFILE1; ORFFILE1=$ORFFILE3; ORFFILE3=$SWITCH
 
       # Loop over other ORFs
       while [[ $(grep --ignore-case --count "atg" $ORFFILE1) != 0 ]]
@@ -480,7 +436,7 @@ do
         tr -d " "
        fi >> $ORFFILE2
        awk -F $'\t' -v orf_num="$orf_num" '{print $0"_orf"orf_num}' $ORFHEADERS >> $ORFHEADERS2
-       cp --force $ORFFILE3 $ORFFILE1
+       SWITCH=$ORFFILE1; ORFFILE1=$ORFFILE3; ORFFILE3=$SWITCH
        
       done
       
@@ -527,11 +483,6 @@ do
      done
      
      # Loop for function getting ORFs for multithreading
-     if [[ $verbose = 1 && $orf = 1 ]]; then echo "ORF | frame "$frame; fi
-     if [[ $verbose = 1 && $translate = 1 ]]; then echo "Translate | frame "$frame; fi
-     if [[ $verbose = 1 && $translate_table != 1 ]]; then echo "Translation code: "$translate_table; fi
-     if [[ $verbose = 1 && $min_prot = 1 ]]; then echo "Minimum protein length: "$min_prot_length; fi
-     if [[ $verbose = 1 ]]; then echo "Using "$threads" threads..."; fi
      core_ORF=$(mktemp)
      HEADERS_TMP=$(mktemp)
      : > $OUTFILE
@@ -551,13 +502,12 @@ do
      
     fi
     
+    # Separate to codons and translate
+    
     if [[ $translate = 1 && $orf = 0 ]]
     then
     SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
-    if [[ $verbose = 1 && $translate = 1 ]]; then echo "Translate | frame "$frame; fi
-    if [[ $verbose = 1 && $translate_table != 1 ]]; then echo "Translation code: "$translate_table; fi
-    if [[ $verbose = 1 && $min_prot = 1 ]]; then echo "Minimum protein length: "$min_prot_length; fi
-    # Separate to codons and translate
+    
       awk -F '' '{for(i=1; i<=NF; i+=3) {printf "%s%s ", $i,$(i+1)$(i+2);}; print ""}' $INFILE |
       translate |
        sed --regexp-extended 's/[atcg]{1,}$//g' |
@@ -574,10 +524,11 @@ do
     fi
     
      # GC content
+     if [[ $verbose = 1 && $percent_GC = 1 ]]; then echo "Percent GC" > /dev/tty; fi
+     
      if [[ $percent_GC = 1 ]]
      then
      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
-     if [[ $verbose = 1 && $percent_GC = 1 ]]; then echo "Percent GC"; fi
       awk '{var=length($0);gsub("[AaTt]","",$0);print length($0)/var*100}' $INFILE
       exit 0
      fi
@@ -586,11 +537,12 @@ do
      paste $HEADERS $INFILE | grep --perl-regexp --invert-match "\t$" > $OUTFILE
 
      # Sort by name
+     if [[ $verbose = 1 && $name_sort = 1 ]]; then echo "Sort by name" > /dev/tty; fi
+     if [[ $verbose = 1 && $reverse_sort = 1 ]]; then echo "Sort in reverse order" > /dev/tty; fi
+     
      if [[ $name_sort = 1 ]]
      then
      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
-      if [[ $verbose = 1 && $name_sort = 1 ]]; then echo "Sort by name"; fi
-      if [[ $verbose = 1 && $reverse_sort = 1 ]]; then echo "Sort in reverse order"; fi
       if [[ $reverse_sort = 1 ]]
       then
        sort --reverse --field-separator=$'\t' --key=1 $INFILE > $OUTFILE
@@ -600,11 +552,11 @@ do
      fi
     
     # Sort by sequence length
+     if [[ $verbose = 1 && $length_sort = 1 ]]; then echo "Sort by length" > /dev/tty; fi
+     if [[ $verbose = 1 && $reverse_sort = 1 ]]; then echo "Sort in reverse order" > /dev/tty; fi
      if [[ $length_sort = 1 ]]
      then
-     SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
-     if [[ $verbose = 1 && $length_sort = 1 ]]; then echo "Sort by length"; fi
-     if [[ $verbose = 1 && $reverse_sort = 1 ]]; then echo "Sort in reverse order"; fi
+     SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH    
       awk '{print length, $0}' $INFILE |
       if [[ $reverse_sort = 1 ]]
       then
@@ -620,11 +572,11 @@ do
      cat $INFILE |
      tr "\t" "\n" > $OUTFILE
      
-        
+    echo "outputing" > /dev/tty    
     # Output to file or stdout
     if [[ $out = 1 ]]
     then
-     if [[ $verbose = 1 && $out = 1 ]]; then echo $(basename $file)" ---> "$output_file; fi
+     if [[ $verbose = 1 ]]; then echo $(basename $1)" ---> "$output_file > /dev/tty; fi
      cp --force $OUTFILE $output_file
     else
      cat $OUTFILE
@@ -633,3 +585,5 @@ do
     rm --force $INFILE
     rm --force $OUTFILE
     rm --force $HEADERS
+    
+    if [[ $verbose = 1 ]]; then show_time $(($(date +%s) -time_start)); fi
