@@ -4,6 +4,7 @@ A bash script for FASTA sequence formatting and modification.
 ```
 fastakit [OPTIONS] FASTA_file.fasta
 	-o | --out	Output to file (otherwise to stdout)
+	-i | --in-place	Modify file in-place
 	-n | --name_sort	Sort FASTA by name
 	-s | --length_sort	Sort FASTA by sequence length (shortest to longest)
 	-r | --reverse_sort	Sort in reverse order

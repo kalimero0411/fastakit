@@ -3,6 +3,7 @@
 # Default parameters
 singleline=1
 out=0
+inplace=0
 threads=1
 name_sort=0
 reverse_sort=0
@@ -24,6 +25,7 @@ function print_usage(){
  printf "
 fastakit [OPTIONS] FASTA_file.fasta
 	-o | --out	Output to file (otherwise to stdout)
+	-i | --in-place	Modify file in-place
 	-n | --name_sort	Sort FASTA by name
 	-s | --length_sort	Sort FASTA by sequence length (shortest to longest)
 	-r | --reverse_sort	Sort in reverse order
@@ -66,6 +68,10 @@ do
   out=1 # Output to file
   shift
   output_file=$1
+  shift
+  ;;
+  -i | --in-place)
+  inplace=1 # Modify file in-place
   shift
   ;;
   -n | --name_sort)
@@ -268,6 +274,7 @@ do
   fi
   
     # Create temp files
+    FILE="${1:-/dev/stdin}"
     HEADERS=$(mktemp)
     INFILE=$(mktemp)
     OUTFILE=$(mktemp)
@@ -286,29 +293,27 @@ do
     fi
     fi
     
+    grep --perl-regexp "^>" ${1:-/dev/stdin} > $HEADERS &
     if [[ $singleline = 1 ]]
     then
     if [[ $lettercase = 0 ]]
     then
-     parallel -a "${1:-/dev/stdin}" -k -j"$threads" --block 30M --pipe-part 'grep --perl-regexp "^>"' > $HEADERS &
-     #perl -pe '$. > 1 and /^>/ ? print "\n" : chomp' "${1:-/dev/stdin}" | grep --perl-regexp --invert-match "^>" 
-     awk '/^>/ {printf((N>0?"\n":""));N++;next;} {printf("%s",$0);}  END {printf("\n");}' "${1:-/dev/stdin}" > $OUTFILE
+     #perl -pe '$. > 1 and /^>/ ? print "\n" : chomp' $FILE | grep --perl-regexp --invert-match "^>" 
+     sed --regexp-extended 's/\r//g' $FILE | awk '/^>/ {printf((N>0?"\n":""));N++;next;} {printf("%s",$0);}  END {printf("\n");}' > $OUTFILE
     
     # Convert to upper-case
     elif [[ $lettercase = 1 ]]
      then
-     parallel -a "${1:-/dev/stdin}" -k -j"$threads" --block 30M --pipe-part 'grep --perl-regexp "^>"' > $HEADERS &
-      awk '/^>/ {printf((N>0?"\n":""));N++;next;} {printf("%s",toupper($0));}  END {printf("\n");}' "${1:-/dev/stdin}" > $OUTFILE
+      sed --regexp-extended 's/\r//g' $FILE | awk '/^>/ {printf((N>0?"\n":""));N++;next;} {printf("%s",toupper($0));}  END {printf("\n");}' > $OUTFILE
 
     # Convert to lower-case
      elif [[ $lettercase = 2 ]]
       then
-      parallel -a "${1:-/dev/stdin}" -k -j"$threads" --block 30M --pipe-part 'grep --perl-regexp "^>"' > $HEADERS &
-       awk '/^>/ {printf((N>0?"\n":""));N++;next;} {printf("%s",tolower($0));}  END {printf("\n");}' "${1:-/dev/stdin}" > $OUTFILE
+       sed --regexp-extended 's/\r//g' $FILE | awk '/^>/ {printf((N>0?"\n":""));N++;next;} {printf("%s",tolower($0));}  END {printf("\n");}' > $OUTFILE
     fi
     else
-     parallel -a "${1:-/dev/stdin}" -k -j"$threads" --block 30M --pipe-part 'grep --perl-regexp "^>"'  > $HEADERS &
-     parallel -a "${1:-/dev/stdin}" -k -j"$threads" --block 30M --pipe-part 'grep --perl-regexp --invert-match "^>"' > $OUTFILE
+     # parallel -a $FILE -k -j"$threads" --block 30M --pipe-part 'grep --perl-regexp --invert-match "^>"' > $OUTFILE
+     grep --perl-regexp --invert-match "^>" $FILE
     fi
      
      # Get complementary sequences
@@ -572,14 +577,18 @@ do
      cat $INFILE |
      tr "\t" "\n" > $OUTFILE
      
-    echo "outputing" > /dev/tty    
     # Output to file or stdout
     if [[ $out = 1 ]]
     then
      if [[ $verbose = 1 ]]; then echo $(basename $1)" ---> "$output_file > /dev/tty; fi
      cp --force $OUTFILE $output_file
     else
+    if [[ $inplace = 1 ]]
+    then
+     cp --force $OUTFILE $FILE
+     else
      cat $OUTFILE
+     fi
     fi
     
     rm --force $INFILE
