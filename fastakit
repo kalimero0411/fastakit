@@ -4,6 +4,7 @@
 singleline=1
 out=0
 inplace=0
+stdin=0
 threads=1
 name_sort=0
 reverse_sort=0
@@ -274,7 +275,15 @@ do
   fi
   
     # Create temp files
-    FILE="${1:-/dev/stdin}"
+    if [ $# -ge 1 -a -f "$1" ]
+    then
+    FILE=$1
+    else
+    inplace=0
+    stdin=1
+    FILE=$(mktemp)
+    cat /dev/stdin > $FILE
+    fi
     HEADERS=$(mktemp)
     INFILE=$(mktemp)
     OUTFILE=$(mktemp)
@@ -293,7 +302,7 @@ do
     fi
     fi
     
-    grep --perl-regexp "^>" ${1:-/dev/stdin} > $HEADERS &
+    grep --perl-regexp "^>" $FILE > $HEADERS &
     if [[ $singleline = 1 ]]
     then
     if [[ $lettercase = 0 ]]
@@ -312,8 +321,8 @@ do
        sed --regexp-extended 's/\r//g' $FILE | awk '/^>/ {printf((N>0?"\n":""));N++;next;} {printf("%s",tolower($0));}  END {printf("\n");}' > $OUTFILE
     fi
     else
-     # parallel -a $FILE -k -j"$threads" --block 30M --pipe-part 'grep --perl-regexp --invert-match "^>"' > $OUTFILE
-     grep --perl-regexp --invert-match "^>" $FILE
+     # parallel -a "${1:-/dev/stdin}" -k -j"$threads" --block 30M --pipe-part 'grep --perl-regexp --invert-match "^>"' > $OUTFILE
+     grep --perl-regexp --invert-match "^>" $FILE > $HEADERS
     fi
      
      # Get complementary sequences
@@ -335,9 +344,9 @@ do
      # Change frame
      if [[ $frame != 1 ]]
      then
-      sed --in-place --regexp-extended 's/^.{'"$(($frame - 1))"'}//g' $INFILE
+      sed --in-place --regexp-extended 's/^.{'"$(($frame - 1))"'}//g' $OUTFILE
      fi
-     
+
      # Get sequence ORFs
      if [[ $verbose = 1 && $orf = 1 ]]; then echo "ORF | frame "$frame > /dev/tty; fi
      if [[ $verbose = 1 && $translate = 1 ]]; then echo "Translate | frame "$frame > /dev/tty; fi
@@ -420,9 +429,9 @@ do
        # Cut until first start and stop codon or until end of line
        awk -F $'\t' '{if(match(tolower($0),"ta[ag]|tga") > 0) print substr($0,match(tolower($0),"ta[ag]|tga")+4);
        if(match(tolower($0),"ta[ag]|tga") == 0) print ""}' $ORFFILE1 |
-       tee $ORFFILE3 |
        awk -F $'\t' '{if(match(tolower($0),"atg") > 0) print substr($0,match(tolower($0),"atg"));
        if(match(tolower($0),"atg") == 0) print ""}' |
+       tee $ORFFILE3 |
        awk -F $'\t' '{if(match(tolower($0),"ta[ag]|tga") > 0) print substr($0,1,match(tolower($0),"ta[ag]|tga")+2);
        if(match(tolower($0),"ta[ag]|tga") == 0) print ""}' |
        if [[ $translate = 1 ]]
@@ -451,13 +460,10 @@ do
       # Cleanup
       if [[ $threads != 1 ]]
       then
-      rm --force $ORFFILE1
-      rm --force $ORFHEADERS
+      rm --force $ORFFILE1 $ORFHEADERS
       fi
       
-      rm --force $ORFFILE2
-      rm --force $ORFFILE3
-      rm --force $ORFHEADERS2
+      rm --force $ORFFILE2 $ORFFILE3 $ORFHEADERS2
      }
      
      # Allocate sequences to requested threads
@@ -501,9 +507,8 @@ do
      do
       wait $pid
      done
-     rm --force $HEADERS
+     rm --force $HEADERS $core_ORF
      HEADERS=$HEADERS_TMP
-     rm --force $core_ORF
      
     fi
     
@@ -583,16 +588,18 @@ do
      if [[ $verbose = 1 ]]; then echo $(basename $1)" ---> "$output_file > /dev/tty; fi
      cp --force $OUTFILE $output_file
     else
-    if [[ $inplace = 1 ]]
-    then
-     cp --force $OUTFILE $FILE
+     if [[ $inplace = 1 ]]
+     then
+      cp --force $OUTFILE $FILE
      else
-     cat $OUTFILE
+      cat $OUTFILE
      fi
     fi
     
-    rm --force $INFILE
-    rm --force $OUTFILE
-    rm --force $HEADERS
+    rm --force $INFILE $OUTFILE
+    if [[ $stdin = 1 ]]
+    then
+     rm --force $FILE
+    fi
     
     if [[ $verbose = 1 ]]; then show_time $(($(date +%s) -time_start)); fi
