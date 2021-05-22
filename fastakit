@@ -34,13 +34,13 @@ fastakit [OPTIONS] FASTA_file.fasta
 	-l | --lower	Sequences to lowercase
 	-c | --complement	Complementary sequence
 	-m | --reverse_seq	Reverse sequence
-	-g | --orf	Sequence from first ATG in frame (Default frame 1)
-	-p | --translate	Protein sequences in current frame (Default frame 1)
-	-a | --table	Translation code (Default standard code)
+	-g | --orf	Sequence from first ATG in frame (Default = frame 1)
+	-p | --translate	Protein sequences in current frame (Default = frame 1)
+	-a | --table	Translation code (Default = standard code)
 	-f | --frame	Frame to extract codons (must be 1, 2 or 3)
-	-e | --min_prot #	Minimum protein size (assumes --translate)
+	-e | --min_prot #	Minimum protein size (Assumes --translate)
 	-t | --threads #	Number of CPU threads to use (Default = 1)
-	-d | --gc	Get percent GC per sequence (turns off --translate)
+	-d | --gc	Get percent GC per sequence (Disables --translate)
 	-v | --verbose	Verbose
 	-h | --help	Display help
 	--skip_singleline	Skip changing multi-line FASTA to single-line FASTA 
@@ -269,6 +269,7 @@ do
    exit 1
   fi
   
+  # Disable translate
   if [[ $percent_GC = 1 ]]
   then
    translate=0
@@ -288,7 +289,7 @@ do
     INFILE=$(mktemp)
     OUTFILE=$(mktemp)
     
-    if [[ $verbose = 1 ]]; then echo "Using "$threads" thread(s)..." > /dev/tty; fi
+    if [[ $verbose = 1 ]]; then echo -en "Using "$threads" thread(s)...\n\n" > /dev/tty; fi
 
     # Create single line FASTA and change to specified case
     if [[ $verbose = 1 ]]; then
@@ -321,24 +322,28 @@ do
        sed --regexp-extended 's/\r//g' $FILE | awk '/^>/ {printf((N>0?"\n":""));N++;next;} {printf("%s",tolower($0));}  END {printf("\n");}' > $OUTFILE
     fi
     else
-     # parallel -a "${1:-/dev/stdin}" -k -j"$threads" --block 30M --pipe-part 'grep --perl-regexp --invert-match "^>"' > $OUTFILE
-     grep --perl-regexp --invert-match "^>" $FILE > $HEADERS
+     parallel -a $FILE -k -j"$threads" --block 30M --pipe-part 'grep --perl-regexp --invert-match "^>"' > $OUTFILE
+     # grep --perl-regexp --invert-match "^>" $FILE > $OUTFILE
     fi
+     if [[ $verbose = 1 ]]; then echo -n "Single line conversion done: " > /dev/tty; show_time $(($(date +%s) -time_start)); echo "" > /dev/tty; fi
      
      # Get complementary sequences
-     if [[ $verbose = 1 && $complement = 1 ]]; then echo "Converting to complement sequence..." > /dev/tty; fi
+
      if [[ $complement = 1 ]]
      then
-     SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
+      if [[ $verbose = 1 ]]; then echo "Converting to complement sequence..." > /dev/tty; fi
+      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
       parallel -a $INFILE -k -j"$threads" --block 30M --pipe-part 'tr \"ATCGatcg\" \"TAGCtagc\"' > $OUTFILE
+      if [[ $verbose = 1 ]]; then echo -n "Complement conversion done: " > /dev/tty; show_time $(($(date +%s) -time_start)); echo "" > /dev/tty; fi
      fi
      
-     # Get reverse sequences
-     if [[ $verbose = 1 && $rev_seq = 1 ]]; then echo "Converting to reverse sequence..." > /dev/tty; fi     
+     # Get reverse sequences     
      if [[ $rev_seq = 1 ]]
      then
-     SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
+      if [[ $verbose = 1 ]]; then echo "Converting to reverse sequence..." > /dev/tty; fi
+      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
       parallel -a $INFILE -k -j"$threads" --block 30M --pipe-part 'rev' > $OUTFILE
+      if [[ $verbose = 1 ]]; then echo -n "Reverse conversion done: " > /dev/tty; show_time $(($(date +%s) -time_start)); echo "" > /dev/tty; fi
      fi
      
      # Change frame
@@ -347,15 +352,12 @@ do
       sed --in-place --regexp-extended 's/^.{'"$(($frame - 1))"'}//g' $OUTFILE
      fi
 
-     # Get sequence ORFs
+     if [[ $orf = 1 ]]
+     then
      if [[ $verbose = 1 && $orf = 1 ]]; then echo "ORF | frame "$frame > /dev/tty; fi
      if [[ $verbose = 1 && $translate = 1 ]]; then echo "Translate | frame "$frame > /dev/tty; fi
      if [[ $verbose = 1 && $translate_table != 1 ]]; then echo "Translation code: "$translate_table > /dev/tty; fi
      if [[ $verbose = 1 && $min_prot = 1 ]]; then echo "Minimum protein length: "$min_prot_length > /dev/tty; fi
-
-     
-     if [[ $orf = 1 ]]
-     then
      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
      function get_orfs(){
      
@@ -509,16 +511,25 @@ do
      done
      rm --force $HEADERS $core_ORF
      HEADERS=$HEADERS_TMP
-     
+     if [[ $verbose = 1 && $translate = 0 ]]
+     then
+      echo -n "ORF detection done: " > /dev/tty; show_time $(($(date +%s) -time_start)); echo "" > /dev/tty
+     fi
+     if [[ $verbose = 1 && $translate = 1 ]]
+     then
+      echo -n "ORF detection and translation done: " > /dev/tty; show_time $(($(date +%s) -time_start)); echo "" > /dev/tty
+     fi
     fi
     
     # Separate to codons and translate
     
     if [[ $translate = 1 && $orf = 0 ]]
     then
-    SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
-    
-      awk -F '' '{for(i=1; i<=NF; i+=3) {printf "%s%s ", $i,$(i+1)$(i+2);}; print ""}' $INFILE |
+     SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
+     if [[ $verbose = 1 ]]; then echo "Translate | frame "$frame > /dev/tty; fi
+     if [[ $verbose = 1 && $translate_table != 1 ]]; then echo "Translation code: "$translate_table > /dev/tty; fi
+     if [[ $verbose = 1 && $min_prot = 1 ]]; then echo "Minimum protein length: "$min_prot_length > /dev/tty; fi
+     awk -F '' '{for(i=1; i<=NF; i+=3) {printf "%s%s ", $i,$(i+1)$(i+2);}; print ""}' $INFILE |
       translate |
        sed --regexp-extended 's/[atcg]{1,}$//g' |
        tr -d " " |
@@ -531,6 +542,7 @@ do
        else
         cat
        fi > $OUTFILE
+       if [[ $verbose = 1 ]]; then echo -n "Translation done: " > /dev/tty; show_time $(($(date +%s) -time_start)); echo "" > /dev/tty; fi
     fi
     
      # GC content
@@ -540,6 +552,7 @@ do
      then
      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
       awk '{var=length($0);gsub("[AaTt]","",$0);print length($0)/var*100}' $INFILE
+      if [[ $verbose = 1 ]]; then echo -n "GC fraction done: " > /dev/tty; show_time $(($(date +%s) -time_start)); echo "" > /dev/tty; fi
       exit 0
      fi
      
@@ -559,6 +572,7 @@ do
       else
        sort --field-separator=$'\t' --key=1 $INFILE > $OUTFILE
       fi
+      if [[ $verbose = 1 ]]; then echo -n "Name sort done: " > /dev/tty; show_time $(($(date +%s) -time_start)); echo "" > /dev/tty; fi
      fi
     
     # Sort by sequence length
@@ -575,6 +589,7 @@ do
        sort --numeric-sort
       fi |
       cut --delimiter=" " --fields=2- > $OUTFILE
+      if [[ $verbose = 1 ]]; then echo -n "Length sort done: " > /dev/tty; show_time $(($(date +%s) -time_start)); echo "" > /dev/tty; fi
      fi
      
      # Convert tabbed to FASTA and remove empty headers
@@ -602,4 +617,4 @@ do
      rm --force $FILE
     fi
     
-    if [[ $verbose = 1 ]]; then show_time $(($(date +%s) -time_start)); fi
+    if [[ $verbose = 1 ]]; then echo "fastakit done:" > /dev/tty; show_time $(($(date +%s) -time_start)) > /dev/tty; fi
