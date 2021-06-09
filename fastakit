@@ -551,7 +551,7 @@ do
      if [[ $percent_GC = 1 ]]
      then
      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
-      awk '{var=length($0);gsub("[AaTt]","",$0);print length($0)/var*100}' $INFILE
+      paste $HEADERS <(awk '{var=length($0);gsub("[AaTt]","",$0);print length($0)/var*100}' $INFILE)
       if [[ $verbose = 1 ]]; then echo -n "GC fraction done: " > /dev/tty; show_time $(($(date +%s) -time_start)); echo "" > /dev/tty; fi
       exit 0
      fi
