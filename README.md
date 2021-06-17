@@ -5,6 +5,8 @@ A bash script for FASTA sequence formatting and modification.
 fastakit [OPTIONS] FASTA_file.fasta
 	-o | --out	Output to file (otherwise to stdout)
 	-i | --in-place	Modify file in-place
+	-j | --unique	Remove duplicate sequences
+	-z | --random	Create random sequences of respective length
 	-n | --name_sort	Sort FASTA by name
 	-s | --length_sort	Sort FASTA by sequence length (shortest to longest)
 	-r | --reverse_sort	Sort in reverse order
@@ -12,17 +14,18 @@ fastakit [OPTIONS] FASTA_file.fasta
 	-l | --lower	Sequences to lowercase
 	-c | --complement	Complementary sequence
 	-m | --reverse_seq	Reverse sequence
-	-g | --orf	Sequence from first ATG in frame (Default frame 1)
-	-p | --translate	Protein sequences in current frame (Default frame 1)
-	-a | --table	Translation code (Default standard code)
-	-f | --frame	Frame to extract codons (must be 1, 2 or 3)
-	-e | --min_prot #	Minimum protein size (assumes --translate)
+	-g | --orf	Sequence from first ATG in frame (Default = frame 1)
+	-p | --translate	Protein sequences in current frame (Default = frame 1)
+	-a | --table #	Translation code (Default = standard code)
+	-f | --frame #	Frame to extract codons (must be 1, 2 or 3)
+	-e | --min_prot #	Minimum protein size (Assumes --translate)
 	-t | --threads #	Number of CPU threads to use (Default = 1)
-	-d | --gc	Get percent GC per sequence (turns off --translate)
+	-d | --gc	Get percent GC per sequence (Disables --translate)
+	-b | --rna_dna	Convert RNA to DNA / DNA to RNA (Default = no conversion)
 	-v | --verbose	Verbose
 	-h | --help	Display help
-	--available_codes	Show available translation codes
 	--skip_singleline	Skip changing multi-line FASTA to single-line FASTA 
+	--available_codes	Show available translation codes 
 ```
   
 - If `--orf` option is selected, each sequence will be divided into individual ORFs from a start to a stop codon in the current frame, or until the end of the sequence.

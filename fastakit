@@ -6,6 +6,8 @@ out=0
 inplace=0
 stdin=0
 threads=1
+unique=0
+random=0
 name_sort=0
 reverse_sort=0
 length_sort=0
@@ -18,6 +20,7 @@ translate=0
 min_prot=0
 translate_table=1
 percent_GC=0
+rna_dna=0
 verbose=0
 help=0
 time_start=$(date +%s)
@@ -27,6 +30,8 @@ function print_usage(){
 fastakit [OPTIONS] FASTA_file.fasta
 	-o | --out	Output to file (otherwise to stdout)
 	-i | --in-place	Modify file in-place
+	-j | --unique	Remove duplicate sequences
+	-z | --random	Create random sequences of respective length
 	-n | --name_sort	Sort FASTA by name
 	-s | --length_sort	Sort FASTA by sequence length (shortest to longest)
 	-r | --reverse_sort	Sort in reverse order
@@ -36,11 +41,12 @@ fastakit [OPTIONS] FASTA_file.fasta
 	-m | --reverse_seq	Reverse sequence
 	-g | --orf	Sequence from first ATG in frame (Default = frame 1)
 	-p | --translate	Protein sequences in current frame (Default = frame 1)
-	-a | --table	Translation code (Default = standard code)
-	-f | --frame	Frame to extract codons (must be 1, 2 or 3)
+	-a | --table #	Translation code (Default = standard code)
+	-f | --frame #	Frame to extract codons (must be 1, 2 or 3)
 	-e | --min_prot #	Minimum protein size (Assumes --translate)
 	-t | --threads #	Number of CPU threads to use (Default = 1)
 	-d | --gc	Get percent GC per sequence (Disables --translate)
+	-b | --rna_dna	Convert RNA to DNA / DNA to RNA (Default = no conversion)
 	-v | --verbose	Verbose
 	-h | --help	Display help
 	--skip_singleline	Skip changing multi-line FASTA to single-line FASTA 
@@ -75,8 +81,16 @@ do
   inplace=1 # Modify file in-place
   shift
   ;;
+  -j | --unique)
+  unique=1 # Remove duplicate sequences
+  shift
+  ;;
   -n | --name_sort)
   name_sort=1 # Sort FASTA file by name
+  shift
+  ;;
+  -z | --random)
+  random=1 # Sort FASTA file by name
   shift
   ;;
   -s | --length_sort)
@@ -118,6 +132,10 @@ do
   ;;
   -d | --gc)
   percent_GC=1 # Get percent GC per sequence
+  shift
+  ;;
+  -b | --rna_dna)
+  rna_dna=1 # Convert RNA to DNA / DNA to RNA
   shift
   ;;
   -a | --table)
@@ -191,68 +209,68 @@ do
 	echo $seq |
 	awk '{print tolower($0)}' | 
 	sed --regexp-extended \
-        's/atg/M/g;
-         s/at[tc]/I/g;
-         s/ac[actg]/T/g;
-         s/aa[tc]/N/g;
+        's/a[tu]g/M/g;
+         s/a[tu][tuc]/I/g;
+         s/ac[actug]/T/g;
+         s/aa[tuc]/N/g;
          s/aa[ag]/K/g;
-         s/ag[tc]/S/g;
-         s/tt[tc]/F/g;
-         s/tt[ag]/L/g;
-         s/tc[acgt]/S/g;
-         s/ta[tc]/Y/g;
-         s/ta[ag]/*/g;
-         s/tg[tc]/C/g;
-         s/tgg/W/g;
-         s/cc[acgt]/P/g;
-         s/ca[tc]/H/g;
+         s/ag[tuc]/S/g;
+         s/[tu][tu][tuc]/F/g;
+         s/[tu][tu][ag]/L/g;
+         s/[tu]c[acgtu]/S/g;
+         s/[tu]a[tuc]/Y/g;
+         s/[tu]a[ag]/*/g;
+         s/[tu]g[tuc]/C/g;
+         s/[tu]gg/W/g;
+         s/cc[acgtu]/P/g;
+         s/ca[tuc]/H/g;
          s/ca[ag]/Q/g;
-         s/cg[gt]/R/g;
-         s/gt[acgt]/V/g;
-         s/gc[acgt]/A/g;
-         s/ga[tc]/D/g;
+         s/cg[gtu]/R/g;
+         s/g[tu][acgtu]/V/g;
+         s/gc[acgtu]/A/g;
+         s/ga[tcu]/D/g;
          s/ga[ag]/E/g;
-         s/gg[acgt]/G/g' |
+         s/gg[acgtu]/G/g' |
          
          # Standard code
          if [[ $translate_table = 1 ]]
          then
           sed --regexp-extended \
-           's/ata/I/g;
+           's/a[tu]a/I/g;
             s/ag[ag]/R/g;
-            s/ct[acgt]/L/g;
+            s/c[tu][acgtu]/L/g;
             s/cg[ac]/R/g;
-            s/tga/*/g;'
+            s/[tu]ga/*/g;'
        
          # Vertebrate mitochondrial code
          elif [[ $translate_table = 2 ]]
          then
           sed --regexp-extended \
-           's/ata/M/g;
+           's/a[tu]a/M/g;
             s/ag[ag]/*/g;
-            s/ct[acgt]/L/g;
+            s/c[tu][acgtu]/L/g;
             s/cg[ac]/R/g;
-            s/tga/W/g;'
+            s/[tu]ga/W/g;'
        
          # Yeast mitochondrial code
          elif [[ $translate_table = 3 ]]
           then
           sed --regexp-extended \
-           's/ata/M/g;
+           's/a[tu]a/M/g;
             s/ag[ag]/R/g;
-            s/ct[acgt]/T/g;
+            s/c[tu][acgtu]/T/g;
             s/cg[ac]/X/g;
-            s/tga/W/g;'
+            s/[tu]ga/W/g;'
        
          # Mold, protozoan, and coelenterate mitochondrial code and the mycoplasma/spiroplasma code
          elif [[ $translate_table = 4 ]]
           then
            sed --regexp-extended \
-            's/ata/I/g;
+            's/a[tu]a/I/g;
              s/ag[ag]/R/g;
-             s/ct[acgt]/L/g;
+             s/c[tu][acgtu]/L/g;
              s/cg[ac]/R/g;
-             s/tga/M/g;'
+             s/[tu]ga/M/g;'
           else
            echo "Error: Unknown translation code"
            tables
@@ -262,7 +280,7 @@ do
 }
   
   # Frame exception
-  if [[ $frame < 1 || $frame > 3 ]]
+  if [ $frame -lt 1 ] || [ $frame -gt 3 ]
   then
    echo "Frame value must be 1, 2 or 3"
    print_usage
@@ -321,33 +339,79 @@ do
       then
        sed --regexp-extended 's/\r//g' $FILE | awk '/^>/ {printf((N>0?"\n":""));N++;next;} {printf("%s",tolower($0));}  END {printf("\n");}' > $OUTFILE
     fi
+     if [[ $verbose = 1 ]]; then echo -n "Single line conversion done: " > /dev/tty; show_time $(($(date +%s) - time_start)); echo "" > /dev/tty; fi
     else
      parallel -a $FILE -k -j"$threads" --block 30M --pipe-part 'grep --perl-regexp --invert-match "^>"' > $OUTFILE
      # grep --perl-regexp --invert-match "^>" $FILE > $OUTFILE
+     if [[ $verbose = 1 ]]; then echo -n "Loading sequence done: " > /dev/tty; show_time $(($(date +%s) - time_start)); echo "" > /dev/tty; fi
     fi
-     if [[ $verbose = 1 ]]; then echo -n "Single line conversion done: " > /dev/tty; show_time $(($(date +%s) -time_start)); echo "" > /dev/tty; fi
+    
+    if [ $complement -eq 1 ] || [ $rna_dna -eq 1 ] || [ $random -eq 1 ]
+    then
+     MOL=$(mktemp)
+     export OUTFILE
+     export MOL
+     parallel -j2 --halt now,success=1 ::: \
+     'grep --ignore-case --max-count=1 "T" $OUTFILE > /dev/null && echo "DNA" > $MOL' \
+     'grep --ignore-case --max-count=1 "U" $OUTFILE > /dev/null && echo "RNA" > $MOL' &> /dev/null
+     MOLECULE=$(cat $MOL)
+     rm --force $MOL
+     fi
      
-     # Get complementary sequences
+     if [[ $random = 1 ]]
+     then
+      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
+      if [[ $MOLECULE = "DNA" ]]
+      then
+       awk -F $'\t' '{print system("tr -dc atcg < /dev/urandom | head -c "length($0))}' $INFILE |
+      tr -d 0 > $OUTFILE
+      else
+       awk -F $'\t' '{print system("tr -dc aucg < /dev/urandom | head -c "length($0))}' $INFILE |
+      tr -d 0 > $OUTFILE
+      fi
+     fi
 
+     # Get complementary sequences
      if [[ $complement = 1 ]]
      then
       if [[ $verbose = 1 ]]; then echo "Converting to complement sequence..." > /dev/tty; fi
       SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
-      parallel -a $INFILE -k -j"$threads" --block 30M --pipe-part 'tr \"ATCGatcg\" \"TAGCtagc\"' > $OUTFILE
-      if [[ $verbose = 1 ]]; then echo -n "Complement conversion done: " > /dev/tty; show_time $(($(date +%s) -time_start)); echo "" > /dev/tty; fi
+      if [[ $MOLECULE = "DNA" ]]
+      then
+       parallel -a $INFILE -k -j"$threads" --block 30M --pipe-part 'tr \"ATCGatcg\" \"TAGCtagc\"' > $OUTFILE
+      else
+       parallel -a $INFILE -k -j"$threads" --block 30M --pipe-part 'tr \"AUCGaucg\" \"UAGCuagc\"' > $OUTFILE
+      fi
+      if [[ $verbose = 1 ]]; then echo -n "Complement conversion done: " > /dev/tty; show_time $(($(date +%s) - time_start)); echo "" > /dev/tty; fi
      fi
      
+     # DNA-to-RNA or RNA-to-DNA      
+     if [[ $rna_dna = 1 ]]
+     then
+      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
+      if [[ $MOLECULE = "DNA" ]]
+      then
+       if [[ $verbose = 1 ]]; then echo "Converting DNA to RNA sequence..." > /dev/tty; fi
+       parallel -a $INFILE -k -j"$threads" --block 30M --pipe-part 'tr \"Tt\" \"Uu\"' > $OUTFILE
+       if [[ $verbose = 1 ]]; then echo -n "DNA-to-RNA conversion done: " > /dev/tty; show_time $(($(date +%s) - time_start)); echo "" > /dev/tty; fi
+      else
+       if [[ $verbose = 1 ]]; then echo "Converting RNA to DNA sequence..." > /dev/tty; fi
+       parallel -a $INFILE -k -j"$threads" --block 30M --pipe-part 'tr \"Uu\" \"Tt\"' > $OUTFILE
+       if [[ $verbose = 1 ]]; then echo -n "RNA-to-DNA conversion done: " > /dev/tty; show_time $(($(date +%s) - time_start)); echo "" > /dev/tty; fi
+      fi
+     fi
+
      # Get reverse sequences     
      if [[ $rev_seq = 1 ]]
      then
       if [[ $verbose = 1 ]]; then echo "Converting to reverse sequence..." > /dev/tty; fi
       SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
       parallel -a $INFILE -k -j"$threads" --block 30M --pipe-part 'rev' > $OUTFILE
-      if [[ $verbose = 1 ]]; then echo -n "Reverse conversion done: " > /dev/tty; show_time $(($(date +%s) -time_start)); echo "" > /dev/tty; fi
+      if [[ $verbose = 1 ]]; then echo -n "Reverse conversion done: " > /dev/tty; show_time $(($(date +%s) - time_start)); echo "" > /dev/tty; fi
      fi
-     
+          
      # Change frame
-     if [[ $frame != 1 ]]
+     if [ $frame -ne 1 ] && [ $translate -eq 1 ] || [ $frame -ne 1 ] && [ $orf -eq 1 ]
      then
       sed --in-place --regexp-extended 's/^.{'"$(($frame - 1))"'}//g' $OUTFILE
      fi
@@ -390,15 +454,15 @@ do
       #  echo -ne "Extracting ORF "$(cat $core_ORF)"\r"
       #fi
       awk -F '' '{for(i=1; i<=NF; i+=3) {printf "%s%s ", $i,$(i+1)$(i+2);}; print ""}' $ORFFILE1 |
-      awk -F $'\t' '{if(match(tolower($0),"atg") > 0) print substr($0,match(tolower($0),"atg"));
-      if(match(tolower($0),"atg") == 0) print ""}' |
+      awk -F $'\t' '{if(match(tolower($0),"a[tu]g") > 0) print substr($0,match(tolower($0),"a[tu]g"));
+      if(match(tolower($0),"a[tu]g") == 0) print ""}' |
       tee $ORFFILE3 |
-      awk -F $'\t' '{if(match(tolower($0),"ta[ag]|tga") > 0) print substr($0,1,match(tolower($0),"ta[ag]|tga")+2);
-      if(match(tolower($0),"ta[ag]|tga") == 0) print $0}' |
+      awk -F $'\t' '{if(match(tolower($0),"[tu]a[ag]|[tu]ga") > 0) print substr($0,1,match(tolower($0),"[tu]a[ag]|[tu]ga")+2);
+      if(match(tolower($0),"[tu]a[ag]|[tu]ga") == 0) print $0}' |
       if [[ $translate = 1 ]]
       then
        translate |
-       sed --regexp-extended 's/[atcg]{1,}$//g' |
+       sed --regexp-extended 's/[atcgu]{1,}$//g' |
        tr -d " " |
        if [[ $min_prot = 1 ]]
        then
@@ -414,7 +478,7 @@ do
       SWITCH=$ORFFILE1; ORFFILE1=$ORFFILE3; ORFFILE3=$SWITCH
 
       # Loop over other ORFs
-      while [[ $(grep --ignore-case --count "atg" $ORFFILE1) != 0 ]]
+      while [[ $(grep --ignore-case --perl-regexp --count "a[tu]g" $ORFFILE1) != 0 ]]
       do
       
        orf_num=$(($orf_num + 1))
@@ -429,17 +493,17 @@ do
        : > $ORFFILE3
        
        # Cut until first start and stop codon or until end of line
-       awk -F $'\t' '{if(match(tolower($0),"ta[ag]|tga") > 0) print substr($0,match(tolower($0),"ta[ag]|tga")+4);
-       if(match(tolower($0),"ta[ag]|tga") == 0) print ""}' $ORFFILE1 |
-       awk -F $'\t' '{if(match(tolower($0),"atg") > 0) print substr($0,match(tolower($0),"atg"));
-       if(match(tolower($0),"atg") == 0) print ""}' |
+       awk -F $'\t' '{if(match(tolower($0),"[tu]a[ag]|[tu]ga") > 0) print substr($0,match(tolower($0),"[tu]a[ag]|[tu]ga")+4);
+       if(match(tolower($0),"[tu]a[ag]|[tu]ga") == 0) print ""}' $ORFFILE1 |
+       awk -F $'\t' '{if(match(tolower($0),"a[tu]g") > 0) print substr($0,match(tolower($0),"a[tu]g"));
+       if(match(tolower($0),"a[tu]g") == 0) print ""}' |
        tee $ORFFILE3 |
-       awk -F $'\t' '{if(match(tolower($0),"ta[ag]|tga") > 0) print substr($0,1,match(tolower($0),"ta[ag]|tga")+2);
-       if(match(tolower($0),"ta[ag]|tga") == 0) print ""}' |
+       awk -F $'\t' '{if(match(tolower($0),"[tu]a[ag]|[tu]ga") > 0) print substr($0,1,match(tolower($0),"[tu]a[ag]|[tu]ga")+2);
+       if(match(tolower($0),"[tu]a[ag]|[tu]ga") == 0) print ""}' |
        if [[ $translate = 1 ]]
        then
         translate |
-        sed --regexp-extended 's/[atcg]{1,}$//g' |
+        sed --regexp-extended 's/[atcgu]{1,}$//g' |
         tr -d " " |
         if [[ $min_prot = 1 ]]
         then
@@ -513,11 +577,11 @@ do
      HEADERS=$HEADERS_TMP
      if [[ $verbose = 1 && $translate = 0 ]]
      then
-      echo -n "ORF detection done: " > /dev/tty; show_time $(($(date +%s) -time_start)); echo "" > /dev/tty
+      echo -n "ORF detection done: " > /dev/tty; show_time $(($(date +%s) - time_start)); echo "" > /dev/tty
      fi
      if [[ $verbose = 1 && $translate = 1 ]]
      then
-      echo -n "ORF detection and translation done: " > /dev/tty; show_time $(($(date +%s) -time_start)); echo "" > /dev/tty
+      echo -n "ORF detection and translation done: " > /dev/tty; show_time $(($(date +%s) - time_start)); echo "" > /dev/tty
      fi
     fi
     
@@ -531,7 +595,7 @@ do
      if [[ $verbose = 1 && $min_prot = 1 ]]; then echo "Minimum protein length: "$min_prot_length > /dev/tty; fi
      awk -F '' '{for(i=1; i<=NF; i+=3) {printf "%s%s ", $i,$(i+1)$(i+2);}; print ""}' $INFILE |
       translate |
-       sed --regexp-extended 's/[atcg]{1,}$//g' |
+       sed --regexp-extended 's/[atcgu]{1,}$//g' |
        tr -d " " |
        
        # remove if less than cutoff
@@ -542,7 +606,7 @@ do
        else
         cat
        fi > $OUTFILE
-       if [[ $verbose = 1 ]]; then echo -n "Translation done: " > /dev/tty; show_time $(($(date +%s) -time_start)); echo "" > /dev/tty; fi
+       if [[ $verbose = 1 ]]; then echo -n "Translation done: " > /dev/tty; show_time $(($(date +%s) - time_start)); echo "" > /dev/tty; fi
     fi
     
      # GC content
@@ -552,27 +616,36 @@ do
      then
      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
       paste $HEADERS <(awk '{var=length($0);gsub("[AaTt]","",$0);print length($0)/var*100}' $INFILE)
-      if [[ $verbose = 1 ]]; then echo -n "GC fraction done: " > /dev/tty; show_time $(($(date +%s) -time_start)); echo "" > /dev/tty; fi
+      if [[ $verbose = 1 ]]; then echo -n "GC fraction done: " > /dev/tty; show_time $(($(date +%s) - time_start)); echo "" > /dev/tty; fi
       exit 0
      fi
      
+     # Combine headers and sequences
      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
      paste $HEADERS $INFILE | grep --perl-regexp --invert-match "\t$" > $OUTFILE
 
+     
+     if [[ $verbose = 1 && $unique = 1 ]]; then echo "Sort by name" > /dev/tty; fi
+     if [[ $unique = 1 ]]
+     then
+      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
+      grep --word-regexp --file <(sort -u -k2 $INFILE | awk -F $'\t' '{print $1}') $INFILE > $OUTFILE
+     fi
+     
      # Sort by name
      if [[ $verbose = 1 && $name_sort = 1 ]]; then echo "Sort by name" > /dev/tty; fi
      if [[ $verbose = 1 && $reverse_sort = 1 ]]; then echo "Sort in reverse order" > /dev/tty; fi
      
      if [[ $name_sort = 1 ]]
      then
-     SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
+      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
       if [[ $reverse_sort = 1 ]]
       then
        sort --reverse --field-separator=$'\t' --key=1 $INFILE > $OUTFILE
       else
        sort --field-separator=$'\t' --key=1 $INFILE > $OUTFILE
       fi
-      if [[ $verbose = 1 ]]; then echo -n "Name sort done: " > /dev/tty; show_time $(($(date +%s) -time_start)); echo "" > /dev/tty; fi
+      if [[ $verbose = 1 ]]; then echo -n "Name sort done: " > /dev/tty; show_time $(($(date +%s) - time_start)); echo "" > /dev/tty; fi
      fi
     
     # Sort by sequence length
@@ -580,7 +653,7 @@ do
      if [[ $verbose = 1 && $reverse_sort = 1 ]]; then echo "Sort in reverse order" > /dev/tty; fi
      if [[ $length_sort = 1 ]]
      then
-     SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH    
+      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH    
       awk '{print length, $0}' $INFILE |
       if [[ $reverse_sort = 1 ]]
       then
@@ -589,7 +662,7 @@ do
        sort --numeric-sort
       fi |
       cut --delimiter=" " --fields=2- > $OUTFILE
-      if [[ $verbose = 1 ]]; then echo -n "Length sort done: " > /dev/tty; show_time $(($(date +%s) -time_start)); echo "" > /dev/tty; fi
+      if [[ $verbose = 1 ]]; then echo -n "Length sort done: " > /dev/tty; show_time $(($(date +%s) - time_start)); echo "" > /dev/tty; fi
      fi
      
      # Convert tabbed to FASTA and remove empty headers
@@ -611,10 +684,10 @@ do
      fi
     fi
     
-    rm --force $INFILE $OUTFILE
+    rm --force $INFILE $OUTFILE $HEADERS
     if [[ $stdin = 1 ]]
     then
      rm --force $FILE
     fi
     
-    if [[ $verbose = 1 ]]; then echo "fastakit done:" > /dev/tty; show_time $(($(date +%s) -time_start)) > /dev/tty; fi
+    if [[ $verbose = 1 ]]; then echo -ne "\nfastakit done: " > /dev/tty; show_time $(($(date +%s) - time_start)) > /dev/tty; fi
