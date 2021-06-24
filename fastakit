@@ -326,24 +326,41 @@ do
     then
     if [[ $lettercase = 0 ]]
     then
-     #perl -pe '$. > 1 and /^>/ ? print "\n" : chomp' $FILE | grep --perl-regexp --invert-match "^>" 
-     sed --regexp-extended 's/\r//g' $FILE | awk '/^>/ {printf((N>0?"\n":""));N++;next;} {printf("%s",$0);}  END {printf("\n");}' > $OUTFILE
-    
+     sed --regexp-extended 's/\r//g' $FILE |
+     perl -pe '$. > 1 and /^>/ ? print "\n" : chomp' |
+     grep --perl-regexp --invert-match "^>" > $OUTFILE
+     
     # Convert to upper-case
     elif [[ $lettercase = 1 ]]
      then
-      sed --regexp-extended 's/\r//g' $FILE | awk '/^>/ {printf((N>0?"\n":""));N++;next;} {printf("%s",toupper($0));}  END {printf("\n");}' > $OUTFILE
-
+      sed --regexp-extended 's/\r//g' $FILE |
+      perl -pe '$. > 1 and /^>/ ? print "\n" : chomp' |
+      grep --perl-regexp --invert-match "^>" |
+      tr "[:lower:]" "[:upper:]" > $OUTFILE
+      
     # Convert to lower-case
      elif [[ $lettercase = 2 ]]
       then
-       sed --regexp-extended 's/\r//g' $FILE | awk '/^>/ {printf((N>0?"\n":""));N++;next;} {printf("%s",tolower($0));}  END {printf("\n");}' > $OUTFILE
+       sed --regexp-extended 's/\r//g' $FILE |
+       perl -pe '$. > 1 and /^>/ ? print "\n" : chomp' |
+       grep --perl-regexp --invert-match "^>" |
+       tr "[:upper:]" "[:lower:]" > $OUTFILE
+      
     fi
-     if [[ $verbose = 1 ]]; then echo -n "Single line conversion done: " > /dev/tty; show_time $(($(date +%s) - time_start)); echo "" > /dev/tty; fi
+     if [[ $verbose = 1 ]]
+     then
+      echo -n "Single line conversion done: " > /dev/tty
+      show_time $(($(date +%s) - time_start))
+      echo "" > /dev/tty
+     fi
     else
      parallel -a $FILE -k -j"$threads" --block 30M --pipe-part 'grep --perl-regexp --invert-match "^>"' > $OUTFILE
-     # grep --perl-regexp --invert-match "^>" $FILE > $OUTFILE
-     if [[ $verbose = 1 ]]; then echo -n "Loading sequence done: " > /dev/tty; show_time $(($(date +%s) - time_start)); echo "" > /dev/tty; fi
+     if [[ $verbose = 1 ]]
+     then
+      echo -n "Loading sequence done: " > /dev/tty
+      show_time $(($(date +%s) - time_start))
+      echo "" > /dev/tty
+     fi
     fi
     
     if [ $complement -eq 1 ] || [ $rna_dna -eq 1 ] || [ $random -eq 1 ]
@@ -369,12 +386,21 @@ do
        awk -F $'\t' '{print system("tr -dc aucg < /dev/urandom | head -c "length($0))}' $INFILE |
       tr -d 0 > $OUTFILE
       fi
+      if [[ $verbose = 1 ]]
+      then
+       echo -n "Random sequence done: " > /dev/tty
+       show_time $(($(date +%s) - time_start))
+       echo "" > /dev/tty
+      fi
      fi
 
      # Get complementary sequences
      if [[ $complement = 1 ]]
      then
-      if [[ $verbose = 1 ]]; then echo "Converting to complement sequence..." > /dev/tty; fi
+      if [[ $verbose = 1 ]]
+      then
+       echo "Converting to complement sequence..." > /dev/tty
+      fi
       SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
       if [[ $MOLECULE = "DNA" ]]
       then
@@ -382,7 +408,12 @@ do
       else
        parallel -a $INFILE -k -j"$threads" --block 30M --pipe-part 'tr \"AUCGaucg\" \"UAGCuagc\"' > $OUTFILE
       fi
-      if [[ $verbose = 1 ]]; then echo -n "Complement conversion done: " > /dev/tty; show_time $(($(date +%s) - time_start)); echo "" > /dev/tty; fi
+      if [[ $verbose = 1 ]]
+      then
+       echo -n "Complement conversion done: " > /dev/tty
+       show_time $(($(date +%s) - time_start))
+       echo "" > /dev/tty
+      fi
      fi
      
      # DNA-to-RNA or RNA-to-DNA      
@@ -391,23 +422,47 @@ do
       SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
       if [[ $MOLECULE = "DNA" ]]
       then
-       if [[ $verbose = 1 ]]; then echo "Converting DNA to RNA sequence..." > /dev/tty; fi
+       if [[ $verbose = 1 ]]
+       then
+        echo "Converting DNA to RNA sequence..." > /dev/tty
+       fi
        parallel -a $INFILE -k -j"$threads" --block 30M --pipe-part 'tr \"Tt\" \"Uu\"' > $OUTFILE
-       if [[ $verbose = 1 ]]; then echo -n "DNA-to-RNA conversion done: " > /dev/tty; show_time $(($(date +%s) - time_start)); echo "" > /dev/tty; fi
+       if [[ $verbose = 1 ]]
+       then
+        echo -n "DNA-to-RNA conversion done: " > /dev/tty
+        show_time $(($(date +%s) - time_start))
+        echo "" > /dev/tty
+       fi
       else
-       if [[ $verbose = 1 ]]; then echo "Converting RNA to DNA sequence..." > /dev/tty; fi
+       if [[ $verbose = 1 ]]
+       then
+        echo "Converting RNA to DNA sequence..." > /dev/tty
+       fi
        parallel -a $INFILE -k -j"$threads" --block 30M --pipe-part 'tr \"Uu\" \"Tt\"' > $OUTFILE
-       if [[ $verbose = 1 ]]; then echo -n "RNA-to-DNA conversion done: " > /dev/tty; show_time $(($(date +%s) - time_start)); echo "" > /dev/tty; fi
+       if [[ $verbose = 1 ]]
+       then
+        echo -n "RNA-to-DNA conversion done: " > /dev/tty
+        show_time $(($(date +%s) - time_start))
+        echo "" > /dev/tty
+       fi
       fi
      fi
 
      # Get reverse sequences     
      if [[ $rev_seq = 1 ]]
      then
-      if [[ $verbose = 1 ]]; then echo "Converting to reverse sequence..." > /dev/tty; fi
+      if [[ $verbose = 1 ]]
+      then
+       echo "Converting to reverse sequence..." > /dev/tty
+      fi
       SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
       parallel -a $INFILE -k -j"$threads" --block 30M --pipe-part 'rev' > $OUTFILE
-      if [[ $verbose = 1 ]]; then echo -n "Reverse conversion done: " > /dev/tty; show_time $(($(date +%s) - time_start)); echo "" > /dev/tty; fi
+      if [[ $verbose = 1 ]]
+      then
+       echo -n "Reverse conversion done: " > /dev/tty
+       show_time $(($(date +%s) - time_start))
+       echo "" > /dev/tty
+      fi
      fi
           
      # Change frame
@@ -418,10 +473,22 @@ do
 
      if [[ $orf = 1 ]]
      then
-     if [[ $verbose = 1 && $orf = 1 ]]; then echo "ORF | frame "$frame > /dev/tty; fi
-     if [[ $verbose = 1 && $translate = 1 ]]; then echo "Translate | frame "$frame > /dev/tty; fi
-     if [[ $verbose = 1 && $translate_table != 1 ]]; then echo "Translation code: "$translate_table > /dev/tty; fi
-     if [[ $verbose = 1 && $min_prot = 1 ]]; then echo "Minimum protein length: "$min_prot_length > /dev/tty; fi
+     if [[ $verbose = 1 && $orf = 1 ]]
+     then
+      echo "ORF | frame "$frame > /dev/tty
+     fi
+     if [[ $verbose = 1 && $translate = 1 ]]
+     then
+      echo "Translate | frame "$frame > /dev/tty
+     fi
+     if [[ $verbose = 1 && $translate_table != 1 ]]
+     then
+      echo "Translation code: "$translate_table > /dev/tty
+     fi
+     if [[ $verbose = 1 && $min_prot = 1 ]]
+     then
+      echo "Minimum protein length: "$min_prot_length > /dev/tty
+     fi
      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
      function get_orfs(){
      
@@ -446,13 +513,6 @@ do
      
       # Separate codons and cut to first start and stop codon
       local orf_num=1
-      #if [[ $(($orf_num % 5)) = 0 ]]
-      # then
-      #  local core_arr=($(cat $core_ORF))
-      #  core_arr[$orf_core]="(core:"$orf_core")="$orf_num
-      #  echo ${core_arr[@]} > $core_ORF
-      #  echo -ne "Extracting ORF "$(cat $core_ORF)"\r"
-      #fi
       awk -F '' '{for(i=1; i<=NF; i+=3) {printf "%s%s ", $i,$(i+1)$(i+2);}; print ""}' $ORFFILE1 |
       awk -F $'\t' '{if(match(tolower($0),"a[tu]g") > 0) print substr($0,match(tolower($0),"a[tu]g"));
       if(match(tolower($0),"a[tu]g") == 0) print ""}' |
@@ -482,14 +542,6 @@ do
       do
       
        orf_num=$(($orf_num + 1))
-       
-       #if [[ $(($orf_num % 5)) = 0 ]]
-       #then
-       # local core_arr=($(cat $core_ORF))
-       # core_arr[$orf_core]="(core:"$orf_core")="$orf_num
-       # echo ${core_arr[@]} > $core_ORF
-       # echo -ne "Extracting ORF "$(cat $core_ORF)"\r"
-      #fi
        : > $ORFFILE3
        
        # Cut until first start and stop codon or until end of line
@@ -533,7 +585,7 @@ do
      }
      
      # Allocate sequences to requested threads
-     seq_num=$(grep --count ">" $HEADERS)
+     seq_num=$(grep --perl-regexp --count "^>" $HEADERS)
      if [[ $seq_num -lt $threads ]]
      then
       threads=$seq_num
@@ -577,11 +629,15 @@ do
      HEADERS=$HEADERS_TMP
      if [[ $verbose = 1 && $translate = 0 ]]
      then
-      echo -n "ORF detection done: " > /dev/tty; show_time $(($(date +%s) - time_start)); echo "" > /dev/tty
+      echo -n "ORF detection done: " > /dev/tty
+      show_time $(($(date +%s) - time_start))
+      echo "" > /dev/tty
      fi
      if [[ $verbose = 1 && $translate = 1 ]]
      then
-      echo -n "ORF detection and translation done: " > /dev/tty; show_time $(($(date +%s) - time_start)); echo "" > /dev/tty
+      echo -n "ORF detection and translation done: " > /dev/tty
+      show_time $(($(date +%s) - time_start))
+      echo "" > /dev/tty
      fi
     fi
     
@@ -590,9 +646,18 @@ do
     if [[ $translate = 1 && $orf = 0 ]]
     then
      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
-     if [[ $verbose = 1 ]]; then echo "Translate | frame "$frame > /dev/tty; fi
-     if [[ $verbose = 1 && $translate_table != 1 ]]; then echo "Translation code: "$translate_table > /dev/tty; fi
-     if [[ $verbose = 1 && $min_prot = 1 ]]; then echo "Minimum protein length: "$min_prot_length > /dev/tty; fi
+     if [[ $verbose = 1 ]]
+     then
+      echo "Translate | frame "$frame > /dev/tty
+     fi
+     if [[ $verbose = 1 && $translate_table != 1 ]]
+     then
+      echo "Translation code: "$translate_table > /dev/tty
+     fi
+     if [[ $verbose = 1 && $min_prot = 1 ]]
+     then
+      echo "Minimum protein length: "$min_prot_length > /dev/tty
+     fi
      awk -F '' '{for(i=1; i<=NF; i+=3) {printf "%s%s ", $i,$(i+1)$(i+2);}; print ""}' $INFILE |
       translate |
        sed --regexp-extended 's/[atcgu]{1,}$//g' |
@@ -606,17 +671,30 @@ do
        else
         cat
        fi > $OUTFILE
-       if [[ $verbose = 1 ]]; then echo -n "Translation done: " > /dev/tty; show_time $(($(date +%s) - time_start)); echo "" > /dev/tty; fi
+       if [[ $verbose = 1 ]]
+       then
+        echo -n "Translation done: " > /dev/tty
+        show_time $(($(date +%s) - time_start))
+        echo "" > /dev/tty
+       fi
     fi
     
      # GC content
-     if [[ $verbose = 1 && $percent_GC = 1 ]]; then echo "Percent GC" > /dev/tty; fi
+     if [[ $verbose = 1 && $percent_GC = 1 ]]
+     then
+      echo "Percent GC" > /dev/tty
+     fi
      
      if [[ $percent_GC = 1 ]]
      then
      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
       paste $HEADERS <(awk '{var=length($0);gsub("[AaTt]","",$0);print length($0)/var*100}' $INFILE)
-      if [[ $verbose = 1 ]]; then echo -n "GC fraction done: " > /dev/tty; show_time $(($(date +%s) - time_start)); echo "" > /dev/tty; fi
+      if [[ $verbose = 1 ]]
+      then
+       echo -n "GC fraction done: " > /dev/tty
+       show_time $(($(date +%s) - time_start))
+       echo "" > /dev/tty
+      fi
       exit 0
      fi
      
@@ -625,7 +703,10 @@ do
      paste $HEADERS $INFILE | grep --perl-regexp --invert-match "\t$" > $OUTFILE
 
      
-     if [[ $verbose = 1 && $unique = 1 ]]; then echo "Sort by name" > /dev/tty; fi
+     if [[ $verbose = 1 && $unique = 1 ]]
+     then
+      echo "Sort by name" > /dev/tty
+     fi
      if [[ $unique = 1 ]]
      then
       SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
@@ -633,36 +714,57 @@ do
      fi
      
      # Sort by name
-     if [[ $verbose = 1 && $name_sort = 1 ]]; then echo "Sort by name" > /dev/tty; fi
-     if [[ $verbose = 1 && $reverse_sort = 1 ]]; then echo "Sort in reverse order" > /dev/tty; fi
-     
      if [[ $name_sort = 1 ]]
      then
+     if [[ $verbose = 1 ]]
+     then
+      echo "Sort by name" > /dev/tty
+     fi
       SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
       if [[ $reverse_sort = 1 ]]
       then
+      if [[ $verbose = 1 ]]
+      then
+       echo "Sort in reverse order" > /dev/tty
+      fi
        sort --reverse --field-separator=$'\t' --key=1 $INFILE > $OUTFILE
       else
        sort --field-separator=$'\t' --key=1 $INFILE > $OUTFILE
       fi
-      if [[ $verbose = 1 ]]; then echo -n "Name sort done: " > /dev/tty; show_time $(($(date +%s) - time_start)); echo "" > /dev/tty; fi
+      if [[ $verbose = 1 ]]
+      then
+       echo -n "Name sort done: " > /dev/tty
+       show_time $(($(date +%s) - time_start))
+       echo "" > /dev/tty
+      fi
      fi
     
     # Sort by sequence length
-     if [[ $verbose = 1 && $length_sort = 1 ]]; then echo "Sort by length" > /dev/tty; fi
-     if [[ $verbose = 1 && $reverse_sort = 1 ]]; then echo "Sort in reverse order" > /dev/tty; fi
      if [[ $length_sort = 1 ]]
      then
+      if [[ $verbose = 1 ]]
+      then
+       echo "Sort by length" > /dev/tty
+      fi
       SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH    
       awk '{print length, $0}' $INFILE |
       if [[ $reverse_sort = 1 ]]
       then
+      if [[ $verbose = 1 ]]
+      then
+       echo "Sort in reverse order" > /dev/tty
+      fi
        sort --numeric-sort --reverse
       else
        sort --numeric-sort
       fi |
       cut --delimiter=" " --fields=2- > $OUTFILE
-      if [[ $verbose = 1 ]]; then echo -n "Length sort done: " > /dev/tty; show_time $(($(date +%s) - time_start)); echo "" > /dev/tty; fi
+      if [[ $verbose = 1 ]]
+      then
+       echo -n "Length sort done: " > /dev/tty
+       show_time $(($(date +%s) - time_start))
+       echo "" > /dev/tty
+      fi
      fi
      
      # Convert tabbed to FASTA and remove empty headers
@@ -673,7 +775,10 @@ do
     # Output to file or stdout
     if [[ $out = 1 ]]
     then
-     if [[ $verbose = 1 ]]; then echo $(basename $1)" ---> "$output_file > /dev/tty; fi
+     if [[ $verbose = 1 ]]
+     then
+      echo $(basename $1)" ---> "$output_file > /dev/tty
+     fi
      cp --force $OUTFILE $output_file
     else
      if [[ $inplace = 1 ]]
@@ -690,4 +795,8 @@ do
      rm --force $FILE
     fi
     
-    if [[ $verbose = 1 ]]; then echo -ne "\nfastakit done: " > /dev/tty; show_time $(($(date +%s) - time_start)) > /dev/tty; fi
+    if [[ $verbose = 1 ]]
+    then
+     echo -ne "\nfastakit done: " > /dev/tty
+     show_time $(($(date +%s) - time_start)) > /dev/tty
+    fi
