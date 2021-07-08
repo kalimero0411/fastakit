@@ -21,6 +21,7 @@ min_prot=0
 translate_table=1
 percent_GC=0
 rna_dna=0
+check_sl=0
 verbose=0
 help=0
 time_start=$(date +%s)
@@ -30,23 +31,25 @@ function print_usage(){
 fastakit [OPTIONS] FASTA_file.fasta
 	-o | --out	Output to file (otherwise to stdout)
 	-i | --in-place	Modify file in-place
-	-j | --unique	Remove duplicate sequences
-	-z | --random	Create random sequences of respective length
-	-n | --name_sort	Sort FASTA by name
-	-s | --length_sort	Sort FASTA by sequence length (shortest to longest)
-	-r | --reverse_sort	Sort in reverse order
-	-u | --upper	Sequences to uppercase
-	-l | --lower	Sequences to lowercase
 	-c | --complement	Complementary sequence
 	-m | --reverse_seq	Reverse sequence
-	-g | --orf	Sequence from first ATG in frame (Default = frame 1)
-	-p | --translate	Protein sequences in current frame (Default = frame 1)
-	-a | --table #	Translation code (Default = standard code)
-	-f | --frame #	Frame to extract codons (must be 1, 2 or 3)
-	-e | --min_prot #	Minimum protein size (Assumes --translate)
+	--unique	Remove duplicate sequences
+	--random	Create random sequences of respective length
+	--name_sort	Sort FASTA by name
+	--length_sort	Sort FASTA by sequence length (shortest to longest)
+	--reverse_sort	Sort in reverse order
+	--upper	Sequences to uppercase
+	--lower	Sequences to lowercase
+	--orf	Sequence from first ATG in frame (Default = frame 1)
+	--translate	Protein sequences in current frame (Default = frame 1)
+	--table #	Translation code (Default = standard code)
+	--frame #	Frame to extract codons (must be 1, 2 or 3)
+	--min_prot #	Minimum protein size (Assumes --translate)
+	--gc	Get percent GC per sequence (Disables --translate)
+	--rna_dna	Convert RNA to DNA / DNA to RNA (Default = no conversion)
+	--min_seq	Minimum sequence size
+	--check	Check if FASTA file is single line (TRUE = exit 0; FALSE = exit 1)
 	-t | --threads #	Number of CPU threads to use (Default = 1)
-	-d | --gc	Get percent GC per sequence (Disables --translate)
-	-b | --rna_dna	Convert RNA to DNA / DNA to RNA (Default = no conversion)
 	-v | --verbose	Verbose
 	-h | --help	Display help
 	--skip_singleline	Skip changing multi-line FASTA to single-line FASTA 
@@ -81,31 +84,31 @@ do
   inplace=1 # Modify file in-place
   shift
   ;;
-  -j | --unique)
+  --unique)
   unique=1 # Remove duplicate sequences
   shift
   ;;
-  -n | --name_sort)
+  --name_sort)
   name_sort=1 # Sort FASTA file by name
   shift
   ;;
-  -z | --random)
+  --random)
   random=1 # Sort FASTA file by name
   shift
   ;;
-  -s | --length_sort)
+  --length_sort)
   length_sort=1 # Sort FASTA file by sequence length
   shift
   ;;
-  -r | --reverse_sort)
+  --reverse_sort)
   reverse_sort=1 # Sort in reverse order
   shift
   ;;
-  -u | --upper)
+  --upper)
   lettercase=1 # Sequences to uppercase
   shift
   ;;
-  -l | --lower)
+  --lower)
   lettercase=2 # Sequences to lowercase
   shift
   ;;
@@ -117,28 +120,28 @@ do
   rev_seq=1 # Reverse sequences
   shift
   ;;
-  -f | --frame)
+  --frame)
   shift # Set frame for codons
   frame=$1
   shift
   ;;
-  -g | --orf)
+  --orf)
   orf=1 # Sequence from first ATG in frame
   shift
   ;;
-  -p | --translate)
+  --translate)
   translate=1 # Translate sequences
   shift
   ;;
-  -d | --gc)
+  --gc)
   percent_GC=1 # Get percent GC per sequence
   shift
   ;;
-  -b | --rna_dna)
+  --rna_dna)
   rna_dna=1 # Convert RNA to DNA / DNA to RNA
   shift
   ;;
-  -a | --table)
+  --table)
   shift
   translate_table=$1 # Alternative translation table
   shift
@@ -151,11 +154,21 @@ do
   tables
   exit 0
   ;;
-  -e | --min_prot)
+  --check)
+  check_sl=1
+  shift
+  ;;
+  --min_prot)
   min_prot=1 # Minimum protein size
   translate=1 # Translate sequences
   shift
   min_prot_length=$1
+  shift
+  ;;
+  --min_seq)
+  min_seq=1 # Minimum protein size
+  shift
+  min_seq_length=$1
   shift
   ;;
   -t | --threads)
@@ -303,6 +316,19 @@ do
     FILE=$(mktemp)
     cat /dev/stdin > $FILE
     fi
+    
+    if [[ $check_sl = 1 ]]
+    then
+    if [[ $(grep --count --perl-regexp "^>" $FILE) = $(grep --count --perl-regexp --invert-match "^>" $FILE) ]]
+    then
+     echo -e "\nFASTA file is single line\n" > /dev/tty
+     exit 0
+    else
+     echo -e "\nFASTA file is NOT single line\n" > /dev/tty
+     exit 1
+    fi
+    fi
+    
     HEADERS=$(mktemp)
     INFILE=$(mktemp)
     OUTFILE=$(mktemp)
@@ -354,7 +380,7 @@ do
       echo "" > /dev/tty
      fi
     else
-     parallel -a $FILE -k -j"$threads" --block 30M --pipe-part 'grep --perl-regexp --invert-match "^>"' > $OUTFILE
+     parallel -a $FILE -k -j"$threads" --block 30M --pipepart 'grep --perl-regexp --invert-match "^>"' > $OUTFILE
      if [[ $verbose = 1 ]]
      then
       echo -n "Loading sequence done: " > /dev/tty
@@ -404,9 +430,9 @@ do
       SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
       if [[ $MOLECULE = "DNA" ]]
       then
-       parallel -a $INFILE -k -j"$threads" --block 30M --pipe-part 'tr \"ATCGatcg\" \"TAGCtagc\"' > $OUTFILE
+       parallel -a $INFILE -k -j"$threads" --block 30M --pipepart 'tr \"ATCGatcg\" \"TAGCtagc\"' > $OUTFILE
       else
-       parallel -a $INFILE -k -j"$threads" --block 30M --pipe-part 'tr \"AUCGaucg\" \"UAGCuagc\"' > $OUTFILE
+       parallel -a $INFILE -k -j"$threads" --block 30M --pipepart 'tr \"AUCGaucg\" \"UAGCuagc\"' > $OUTFILE
       fi
       if [[ $verbose = 1 ]]
       then
@@ -426,7 +452,7 @@ do
        then
         echo "Converting DNA to RNA sequence..." > /dev/tty
        fi
-       parallel -a $INFILE -k -j"$threads" --block 30M --pipe-part 'tr \"Tt\" \"Uu\"' > $OUTFILE
+       parallel -a $INFILE -k -j"$threads" --block 30M --pipepart 'tr \"Tt\" \"Uu\"' > $OUTFILE
        if [[ $verbose = 1 ]]
        then
         echo -n "DNA-to-RNA conversion done: " > /dev/tty
@@ -438,7 +464,7 @@ do
        then
         echo "Converting RNA to DNA sequence..." > /dev/tty
        fi
-       parallel -a $INFILE -k -j"$threads" --block 30M --pipe-part 'tr \"Uu\" \"Tt\"' > $OUTFILE
+       parallel -a $INFILE -k -j"$threads" --block 30M --pipepart 'tr \"Uu\" \"Tt\"' > $OUTFILE
        if [[ $verbose = 1 ]]
        then
         echo -n "RNA-to-DNA conversion done: " > /dev/tty
@@ -456,7 +482,7 @@ do
        echo "Converting to reverse sequence..." > /dev/tty
       fi
       SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
-      parallel -a $INFILE -k -j"$threads" --block 30M --pipe-part 'rev' > $OUTFILE
+      parallel -a $INFILE -k -j"$threads" --block 30M --pipepart 'rev' > $OUTFILE
       if [[ $verbose = 1 ]]
       then
        echo -n "Reverse conversion done: " > /dev/tty
@@ -464,7 +490,15 @@ do
        echo "" > /dev/tty
       fi
      fi
-          
+     
+     # Minimum length (nucleotide)
+     if [[ $min_seq = 1 ]]
+     then
+      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
+      awk -v min_seq_length="$min_seq_length" '{if(match($0,"*|$") - 1 >= min_seq_length) print $0;
+      if(match($0,"*|$") - 1 < min_seq_length) print ""}' $INFILE > $OUTFILE
+     fi
+       
      # Change frame
      if [ $frame -ne 1 ] && [ $translate -eq 1 ] || [ $frame -ne 1 ] && [ $orf -eq 1 ]
      then
@@ -705,12 +739,14 @@ do
      
      if [[ $verbose = 1 && $unique = 1 ]]
      then
-      echo "Sort by name" > /dev/tty
+      echo "Removing duplicates" > /dev/tty
      fi
      if [[ $unique = 1 ]]
      then
       SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
-      grep --word-regexp --file <(sort -u -k2 $INFILE | awk -F $'\t' '{print $1}') $INFILE > $OUTFILE
+      sort --unique --key=2 $INFILE > $OUTFILE
+      echo -n "Remove duplicates done: " > /dev/tty
+      show_time $(($(date +%s) - time_start))
      fi
      
      # Sort by name
@@ -747,7 +783,7 @@ do
        echo "Sort by length" > /dev/tty
       fi
       SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH    
-      awk '{print length, $0}' $INFILE |
+      awk -F '\t' '{OFS="\t"; print length($2),$0}' $INFILE |
       if [[ $reverse_sort = 1 ]]
       then
       if [[ $verbose = 1 ]]
@@ -758,7 +794,7 @@ do
       else
        sort --numeric-sort
       fi |
-      cut --delimiter=" " --fields=2- > $OUTFILE
+      cut --fields=2,3 > $OUTFILE
       if [[ $verbose = 1 ]]
       then
        echo -n "Length sort done: " > /dev/tty
