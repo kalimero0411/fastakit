@@ -15,12 +15,14 @@ fastakit [OPTIONS] FASTA_file.fasta
 	--upper	Sequences to uppercase
 	--lower	Sequences to lowercase
 	--orf	Sequence from first ATG in frame (Default = frame 1)
+	--max_orf_num #	Maximum number of ORFs to output per sequence
 	--translate	Protein sequences in current frame (Default = frame 1)
 	--table #	Translation code (Default = standard code)
 	--frame #	Frame to extract codons (must be 1, 2 or 3)
 	--min_prot #	Minimum protein size (Assumes --translate)
 	--gc	Get percent GC per sequence (Disables --translate)
 	--rna_dna	Convert RNA to DNA / DNA to RNA (Default = no conversion)
+	--min_max_seq #,#	Minimum/Maximum sequence size (e.g. 10,50 ; 0 to ignore)
 	--check	Check if FASTA file is single line (TRUE = exit 0; FALSE = exit 1)
 	-t | --threads #	Number of CPU threads to use (Default = 1)
 	-v | --verbose	Verbose

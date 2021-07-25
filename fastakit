@@ -15,6 +15,8 @@ lettercase=0
 complement=0
 rev_seq=0
 orf=0
+max_orf_num=0
+min_max_seq_length=(0 0)
 frame=1
 translate=0
 min_prot=0
@@ -41,13 +43,14 @@ fastakit [OPTIONS] FASTA_file.fasta
 	--upper	Sequences to uppercase
 	--lower	Sequences to lowercase
 	--orf	Sequence from first ATG in frame (Default = frame 1)
+	--max_orf_num #	Maximum number of ORFs to output per sequence
 	--translate	Protein sequences in current frame (Default = frame 1)
 	--table #	Translation code (Default = standard code)
 	--frame #	Frame to extract codons (must be 1, 2 or 3)
 	--min_prot #	Minimum protein size (Assumes --translate)
 	--gc	Get percent GC per sequence (Disables --translate)
 	--rna_dna	Convert RNA to DNA / DNA to RNA (Default = no conversion)
-	--min_seq	Minimum sequence size
+	--min_max_seq #,#	Minimum/Maximum sequence size (e.g. 10,50 ; 0 to ignore)
 	--check	Check if FASTA file is single line (TRUE = exit 0; FALSE = exit 1)
 	-t | --threads #	Number of CPU threads to use (Default = 1)
 	-v | --verbose	Verbose
@@ -129,6 +132,11 @@ do
   orf=1 # Sequence from first ATG in frame
   shift
   ;;
+  --max_orf_num)
+  shift
+  max_orf_num=$1 # Maximum number of ORFs per sequence
+  shift
+  ;;
   --translate)
   translate=1 # Translate sequences
   shift
@@ -165,10 +173,9 @@ do
   min_prot_length=$1
   shift
   ;;
-  --min_seq)
-  min_seq=1 # Minimum protein size
+  --min_max_seq)
   shift
-  min_seq_length=$1
+  IFS="," min_max_seq_length=($(echo "$1")) # Minimum/Maximum nucleotide sequence size
   shift
   ;;
   -t | --threads)
@@ -379,6 +386,8 @@ do
       show_time $(($(date +%s) - time_start))
       echo "" > /dev/tty
      fi
+     
+    # Skip single line conversion
     else
      parallel -a $FILE -k -j"$threads" --block 30M --pipepart 'grep --perl-regexp --invert-match "^>"' > $OUTFILE
      if [[ $verbose = 1 ]]
@@ -398,7 +407,6 @@ do
      'grep --ignore-case --max-count=1 "T" $OUTFILE > /dev/null && echo "DNA" > $MOL' \
      'grep --ignore-case --max-count=1 "U" $OUTFILE > /dev/null && echo "RNA" > $MOL' &> /dev/null
      MOLECULE=$(cat $MOL)
-     rm --force $MOL
      fi
      
      if [[ $random = 1 ]]
@@ -491,14 +499,6 @@ do
       fi
      fi
      
-     # Minimum length (nucleotide)
-     if [[ $min_seq = 1 ]]
-     then
-      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
-      awk -v min_seq_length="$min_seq_length" '{if(match($0,"*|$") - 1 >= min_seq_length) print $0;
-      if(match($0,"*|$") - 1 < min_seq_length) print ""}' $INFILE > $OUTFILE
-     fi
-       
      # Change frame
      if [ $frame -ne 1 ] && [ $translate -eq 1 ] || [ $frame -ne 1 ] && [ $orf -eq 1 ]
      then
@@ -572,10 +572,14 @@ do
       SWITCH=$ORFFILE1; ORFFILE1=$ORFFILE3; ORFFILE3=$SWITCH
 
       # Loop over other ORFs
-      while [[ $(grep --ignore-case --perl-regexp --count "a[tu]g" $ORFFILE1) != 0 ]]
+      while [ $(grep --ignore-case --perl-regexp --count "a[tu]g" $ORFFILE1) -ne 0 ]
       do
+      orf_num=$(($orf_num + 1))
+      if [ $max_orf_num -ne 0 ] && [ $orf_num -gt $max_orf_num ]
+      then
+       break
+      fi
       
-       orf_num=$(($orf_num + 1))
        : > $ORFFILE3
        
        # Cut until first start and stop codon or until end of line
@@ -659,8 +663,8 @@ do
      do
       wait $pid
      done
-     rm --force $HEADERS $core_ORF
      HEADERS=$HEADERS_TMP
+     
      if [[ $verbose = 1 && $translate = 0 ]]
      then
       echo -n "ORF detection done: " > /dev/tty
@@ -675,8 +679,21 @@ do
      fi
     fi
     
-    # Separate to codons and translate
+    # Minimum length (nucleotide)
+     if [ ${min_max_seq_length[0]} -gt 0 ] || [ ${min_max_seq_length[1]} -gt 0 ]
+     then
+     SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
+     if [ ${min_max_seq_length[1]} -eq 0 ]
+     then
+      awk -v min_seq_length="${min_max_seq_length[0]}" '{if(length($0) - 1 >= min_seq_length) print $0;
+      else print ""}' $INFILE > $OUTFILE
+     else
+      awk -v min_seq_length="${min_max_seq_length[0]}" -v max_seq_length="${min_max_seq_length[1]}" '{if(length($0) - 1 >= min_seq_length && length($0) - 1 <= max_seq_length) print $0;
+      else print ""}' $INFILE > $OUTFILE
+     fi
+     fi
     
+    # Separate to codons and translate
     if [[ $translate = 1 && $orf = 0 ]]
     then
      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
@@ -734,7 +751,8 @@ do
      
      # Combine headers and sequences
      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
-     paste $HEADERS $INFILE | grep --perl-regexp --invert-match "\t$" > $OUTFILE
+     paste $HEADERS $INFILE |
+     grep --perl-regexp --invert-match "\t$" > $OUTFILE
 
      
      if [[ $verbose = 1 && $unique = 1 ]]
@@ -803,7 +821,7 @@ do
       fi
      fi
      
-     # Convert tabbed to FASTA and remove empty headers
+     # Convert tabbed to FASTA
      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
      cat $INFILE |
      tr "\t" "\n" > $OUTFILE
@@ -825,7 +843,8 @@ do
      fi
     fi
     
-    rm --force $INFILE $OUTFILE $HEADERS
+    # Cleanup temp files
+    rm --force $INFILE $OUTFILE $HEADERS $MOL $core_ORF
     if [[ $stdin = 1 ]]
     then
      rm --force $FILE
