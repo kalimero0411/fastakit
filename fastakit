@@ -24,6 +24,7 @@ translate_table=1
 percent_GC=0
 rna_dna=0
 check_sl=0
+N50=0
 verbose=0
 help=0
 time_start=$(date +%s)
@@ -55,7 +56,8 @@ fastakit [OPTIONS] FASTA_file.fasta
 	-t | --threads #	Number of CPU threads to use (Default = 1)
 	-v | --verbose	Verbose
 	-h | --help	Display help
-	--skip_singleline	Skip changing multi-line FASTA to single-line FASTA 
+	--n50	Calculate N50
+	--skip_singleline	Skip changing multi-line FASTA to single-line FASTA
 	--available_codes	Show available translation codes
 
 "
@@ -181,6 +183,10 @@ do
   -t | --threads)
   shift
   threads=$1 # Number of CPU threads
+  shift
+  ;;
+  --n50)
+  N50=1 # Calculate N50
   shift
   ;;
   -v | --verbose)
@@ -396,6 +402,17 @@ do
       show_time $(($(date +%s) - time_start))
       echo "" > /dev/tty
      fi
+    fi
+    
+    if [ $N50 -eq 1 ]
+    then
+     lengths=$(mktemp)
+     grep -v ">" $OUTFILE | awk '{print length($0)}' | sort -rn > $lengths
+     total=$(awk '{OFS="\t"}; {sum+=$0}; {print NR,sum}' $lengths | tail -1 | cut -f2)
+     n50_idx=$(awk '{OFS="\t"}; {sum+=$0}; {print NR,sum}' $lengths | awk -v total=$total -F $'\t' '{if($2 > (total/2))print $0}' | head -1 | cut -f1)
+     echo "N50: "$(awk -v n50_idx=$n50_idx 'NR==n50_idx{print $0}' $lengths) > /dev/tty
+     rm --force $lengths
+     exit 0
     fi
     
     if [ $complement -eq 1 ] || [ $rna_dna -eq 1 ] || [ $random -eq 1 ]
