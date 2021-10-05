@@ -411,6 +411,7 @@ do
      total=$(awk '{OFS="\t"}; {sum+=$0}; {print NR,sum}' $lengths | tail -1 | cut -f2)
      n50_idx=$(awk '{OFS="\t"}; {sum+=$0}; {print NR,sum}' $lengths | awk -v total=$total -F $'\t' '{if($2 > (total/2))print $0}' | head -1 | cut -f1)
      echo "N50: "$(awk -v n50_idx=$n50_idx 'NR==n50_idx{print $0}' $lengths) > /dev/tty
+     echo "L50: "$n50_idx > /dev/tty
      rm --force $lengths
      exit 0
     fi
