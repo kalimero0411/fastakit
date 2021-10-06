@@ -397,7 +397,8 @@ do
      echo "Largest sequence: "$(head -1 $lengths) > /dev/tty
      echo "Smallest sequence: "$(tail -1 $lengths) > /dev/tty
      half_num=$(awk -v num_seq=$num_seq 'NR==(int(num_seq/2)+1){x=$0; print x}' $lengths)
-     echo "Median: "$(awk -v num_seq=$num_seq half_num=$half_num 'NR==int(num_seq/2){if(num_seq/2 == int(num_seq/2)) print ($0+$half_num)/2; else print $0}' $lengths) > /dev/tty
+     echo "Median: "$(awk -v num_seq=$num_seq -v half_num=$half_num 'NR==int(num_seq/2){if(num_seq/2 == int(num_seq/2)) print ($0+half_num)/2; else print $0}' $lengths) > /dev/tty
+     echo "Mean: "$(bc <<< "scale=2; $total/$num_seq")
      echo "N50: "$(awk -v n50_idx=$n50_idx 'NR==n50_idx{print $0}' $lengths) > /dev/tty
      echo "L50: "$n50_idx > /dev/tty
      rm --force $lengths
