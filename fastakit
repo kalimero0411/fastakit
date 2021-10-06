@@ -297,7 +297,7 @@ do
   # Disable translate
   if [ ! -z ${percent_GC+x} ]
   then
-   translate=0
+   unset translate
   fi
   
     # Create temp files
@@ -388,24 +388,28 @@ do
     if [ ! -z ${stats+x} ]
     then
      lengths=$(mktemp)
-     grep -v ">" $OUTFILE | awk '{print length($0)}' | sort -rn > $lengths
+     awk '{print length($0)}' $OUTFILE | sort -rn > $lengths
      total=$(awk '{OFS="\t"}; {sum+=$0}; {print NR,sum}' $lengths | tail -1 | cut -f2)
-     n50_idx=$(awk '{OFS="\t"}; {sum+=$0}; {print NR,sum}' $lengths | awk -v total=$total -F $'\t' '{if($2 > (total/2))print $0}' | head -1 | cut -f1)
+     n50_idx=$(awk '{OFS="\t"}; {sum+=$0}; {print NR,sum}' $lengths | awk -v total=$total -F $'\t' '{if($2 > (total*0.5))print $0}' | head -1 | cut -f1)
+     n90_idx=$(awk '{OFS="\t"}; {sum+=$0}; {print NR,sum}' $lengths | awk -v total=$total -F $'\t' '{if($2 > (total*0.9))print $0}' | head -1 | cut -f1)
      num_seq=$(cat $lengths | wc -l)
+     half_num=$(awk -v num_seq=$num_seq 'NR==(int(num_seq/2)+1){x=$0; print x}' $lengths)
      echo "Total length: "$total > /dev/tty
      echo "Sequence #: "$num_seq > /dev/tty
      echo "Largest sequence: "$(head -1 $lengths) > /dev/tty
      echo "Smallest sequence: "$(tail -1 $lengths) > /dev/tty
-     half_num=$(awk -v num_seq=$num_seq 'NR==(int(num_seq/2)+1){x=$0; print x}' $lengths)
      echo "Median: "$(awk -v num_seq=$num_seq -v half_num=$half_num 'NR==int(num_seq/2){if(num_seq/2 == int(num_seq/2)) print ($0+half_num)/2; else print $0}' $lengths) > /dev/tty
      echo "Mean: "$(bc <<< "scale=2; $total/$num_seq")
+     echo "GC%: "$(awk 'BEGIN {RS=""}{gsub(/\n/,"",$0}; var=length($0); {gsub("[AaTt]","",$0); print length($0)/var*100}' $OUTFILE) > /dev/tty
      echo "N50: "$(awk -v n50_idx=$n50_idx 'NR==n50_idx{print $0}' $lengths) > /dev/tty
      echo "L50: "$n50_idx > /dev/tty
+     echo "N90: "$(awk -v n90_idx=$n90_idx 'NR==n90_idx{print $0}' $lengths) > /dev/tty
+     echo "L90: "$n90_idx > /dev/tty
      rm --force $lengths
      exit 0
     fi
     
-    if [ $complement -eq 1 ] || [ $rna_dna -eq 1 ] || [ $random -eq 1 ]
+    if [ ! -z ${complement+x} ] || [ ! -z ${rna_dna+x} ] || [ ! -z ${random+x} ]
     then
      MOL=$(mktemp)
      export OUTFILE
