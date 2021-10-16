@@ -206,7 +206,7 @@ do
     else
         ((sec=num))
     fi
-    echo "$day"d "$hour"h "$min"m "$sec"s > /dev/tty
+    echo "$day"d "$hour"h "$min"m "$sec"s >> $(readlink /proc/$$/fd/2)
 }
 
   # Translation function
@@ -315,10 +315,10 @@ do
     then
     if [[ $(grep --count --perl-regexp "^>" $FILE) = $(grep --count --perl-regexp --invert-match "^>" $FILE) ]]
     then
-     echo -e "\nFASTA file is single line\n" > /dev/tty
+     echo -e "\nFASTA file is single line\n" >> $(readlink /proc/$$/fd/2)
      exit 0
     else
-     echo -e "\nFASTA file is NOT single line\n" > /dev/tty
+     echo -e "\nFASTA file is NOT single line\n" >> $(readlink /proc/$$/fd/2)
      exit 1
     fi
     fi
@@ -327,17 +327,17 @@ do
     INFILE=$(mktemp)
     OUTFILE=$(mktemp)
     
-    if [ ! -z ${verbose+x} ]; then echo -en "Using "$threads" thread(s)...\n\n" > /dev/tty; fi
+    if [ ! -z ${verbose+x} ]; then echo -en "Using "$threads" thread(s)...\n\n" >> $(readlink /proc/$$/fd/2); fi
 
     # Create single line FASTA and change to specified case
     if [ ! -z ${verbose+x} ]; then
     if [ ! -z ${singleline+x} ]; then
-    if [[ $lettercase = 0 ]]; then echo "Converting to single line FASTA..." > /dev/tty
-     elif [[ $lettercase = 1 ]]; then echo "Converting to upper-case single line FASTA..." > /dev/tty
-     elif [[ $lettercase = 2 ]]; then echo "Converting to lower-case single line FASTA..." > /dev/tty
+    if [[ $lettercase = 0 ]]; then echo "Converting to single line FASTA..." >> $(readlink /proc/$$/fd/2)
+     elif [[ $lettercase = 1 ]]; then echo "Converting to upper-case single line FASTA..." >> $(readlink /proc/$$/fd/2)
+     elif [[ $lettercase = 2 ]]; then echo "Converting to lower-case single line FASTA..." >> $(readlink /proc/$$/fd/2)
     fi
     else
-     echo "Skipping single line FASTA conversion..." > /dev/tty
+     echo "Skipping single line FASTA conversion..." >> $(readlink /proc/$$/fd/2)
     fi
     fi
     
@@ -369,9 +369,9 @@ do
     fi
      if [ ! -z ${verbose+x} ]
      then
-      echo -n "Single line conversion done: " > /dev/tty
+      echo -n "Single line conversion done: " >> $(readlink /proc/$$/fd/2)
       show_time $(($(date +%s) - time_start))
-      echo "" > /dev/tty
+      echo "" >> $(readlink /proc/$$/fd/2)
      fi
      
     # Skip single line conversion
@@ -379,9 +379,9 @@ do
      parallel -a $FILE -k -j"$threads" --block 30M --pipepart 'grep --perl-regexp --invert-match "^>"' > $OUTFILE
      if [ ! -z ${verbose+x} ]
      then
-      echo -n "Loading sequence done: " > /dev/tty
+      echo -n "Loading sequence done: " >> $(readlink /proc/$$/fd/2)
       show_time $(($(date +%s) - time_start))
-      echo "" > /dev/tty
+      echo "" >> $(readlink /proc/$$/fd/2)
      fi
     fi
     
@@ -394,17 +394,17 @@ do
      n90_idx=$(awk '{OFS="\t"}; {sum+=$0}; {print NR,sum}' $lengths | awk -v total=$total -F $'\t' '{if($2 > (total*0.9))print $0}' | head -1 | cut -f1)
      num_seq=$(cat $lengths | wc -l)
      half_num=$(awk -v num_seq=$num_seq 'NR==(int(num_seq/2)+1){x=$0; print x}' $lengths)
-     echo "Total length: "$total > /dev/tty
-     echo "Sequence #: "$num_seq > /dev/tty
-     echo "Largest sequence: "$(head -1 $lengths) > /dev/tty
-     echo "Smallest sequence: "$(tail -1 $lengths) > /dev/tty
-     echo "Median: "$(awk -v num_seq=$num_seq -v half_num=$half_num 'NR==int(num_seq/2){if(num_seq/2 == int(num_seq/2)) print ($0+half_num)/2; else print $0}' $lengths) > /dev/tty
+     echo "Total length: "$total >> $(readlink /proc/$$/fd/2)
+     echo "Sequence #: "$num_seq >> $(readlink /proc/$$/fd/2)
+     echo "Largest sequence: "$(head -1 $lengths) >> $(readlink /proc/$$/fd/2)
+     echo "Smallest sequence: "$(tail -1 $lengths) >> $(readlink /proc/$$/fd/2)
+     echo "Median: "$(awk -v num_seq=$num_seq -v half_num=$half_num 'NR==int(num_seq/2){if(num_seq/2 == int(num_seq/2)) print ($0+half_num)/2; else print $0}' $lengths) >> $(readlink /proc/$$/fd/2)
      echo "Mean: "$(bc <<< "scale=2; $total/$num_seq")
-     echo "GC%: "$(bc <<< "scale=2; $(cat $OUTFILE | tr -d "\n" | tr -d "[AaTt]" | wc -m)*100/$(cat $OUTFILE | tr -d "\n" | wc -m)") > /dev/tty
-     echo "N50: "$(awk -v n50_idx=$n50_idx 'NR==n50_idx{print $0}' $lengths) > /dev/tty
-     echo "L50: "$n50_idx > /dev/tty
-     echo "N90: "$(awk -v n90_idx=$n90_idx 'NR==n90_idx{print $0}' $lengths) > /dev/tty
-     echo "L90: "$n90_idx > /dev/tty
+     echo "GC%: "$(bc <<< "scale=2; $(cat $OUTFILE | tr -d "\n" | tr -d "[AaTt]" | wc -m)*100/$(cat $OUTFILE | tr -d "\n" | wc -m)") >> $(readlink /proc/$$/fd/2)
+     echo "N50: "$(awk -v n50_idx=$n50_idx 'NR==n50_idx{print $0}' $lengths) >> $(readlink /proc/$$/fd/2)
+     echo "L50: "$n50_idx >> $(readlink /proc/$$/fd/2)
+     echo "N90: "$(awk -v n90_idx=$n90_idx 'NR==n90_idx{print $0}' $lengths) >> $(readlink /proc/$$/fd/2)
+     echo "L90: "$n90_idx >> $(readlink /proc/$$/fd/2)
      rm --force $lengths
      exit 0
     fi
@@ -433,9 +433,9 @@ do
       fi
       if [ ! -z ${verbose+x} ]
       then
-       echo -n "Random sequence done: " > /dev/tty
+       echo -n "Random sequence done: " >> $(readlink /proc/$$/fd/2)
        show_time $(($(date +%s) - time_start))
-       echo "" > /dev/tty
+       echo "" >> $(readlink /proc/$$/fd/2)
       fi
      fi
 
@@ -444,7 +444,7 @@ do
      then
       if [ ! -z ${verbose+x} ]
       then
-       echo "Converting to complement sequence..." > /dev/tty
+       echo "Converting to complement sequence..." >> $(readlink /proc/$$/fd/2)
       fi
       SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
       if [[ $MOLECULE = "DNA" ]]
@@ -455,9 +455,9 @@ do
       fi
       if [ ! -z ${verbose+x} ]
       then
-       echo -n "Complement conversion done: " > /dev/tty
+       echo -n "Complement conversion done: " >> $(readlink /proc/$$/fd/2)
        show_time $(($(date +%s) - time_start))
-       echo "" > /dev/tty
+       echo "" >> $(readlink /proc/$$/fd/2)
       fi
      fi
      
@@ -469,26 +469,26 @@ do
       then
        if [ ! -z ${verbose+x} ]
        then
-        echo "Converting DNA to RNA sequence..." > /dev/tty
+        echo "Converting DNA to RNA sequence..." >> $(readlink /proc/$$/fd/2)
        fi
        parallel -a $INFILE -k -j"$threads" --block 30M --pipepart 'tr \"Tt\" \"Uu\"' > $OUTFILE
        if [ ! -z ${verbose+x} ]
        then
-        echo -n "DNA-to-RNA conversion done: " > /dev/tty
+        echo -n "DNA-to-RNA conversion done: " >> $(readlink /proc/$$/fd/2)
         show_time $(($(date +%s) - time_start))
-        echo "" > /dev/tty
+        echo "" >> $(readlink /proc/$$/fd/2)
        fi
       else
        if [ ! -z ${verbose+x} ]
        then
-        echo "Converting RNA to DNA sequence..." > /dev/tty
+        echo "Converting RNA to DNA sequence..." >> $(readlink /proc/$$/fd/2)
        fi
        parallel -a $INFILE -k -j"$threads" --block 30M --pipepart 'tr \"Uu\" \"Tt\"' > $OUTFILE
        if [ ! -z ${verbose+x} ]
        then
-        echo -n "RNA-to-DNA conversion done: " > /dev/tty
+        echo -n "RNA-to-DNA conversion done: " >> $(readlink /proc/$$/fd/2)
         show_time $(($(date +%s) - time_start))
-        echo "" > /dev/tty
+        echo "" >> $(readlink /proc/$$/fd/2)
        fi
       fi
      fi
@@ -498,15 +498,15 @@ do
      then
       if [ ! -z ${verbose+x} ]
       then
-       echo "Converting to reverse sequence..." > /dev/tty
+       echo "Converting to reverse sequence..." >> $(readlink /proc/$$/fd/2)
       fi
       SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
       parallel -a $INFILE -k -j"$threads" --block 30M --pipepart 'rev' > $OUTFILE
       if [ ! -z ${verbose+x} ]
       then
-       echo -n "Reverse conversion done: " > /dev/tty
+       echo -n "Reverse conversion done: " >> $(readlink /proc/$$/fd/2)
        show_time $(($(date +%s) - time_start))
-       echo "" > /dev/tty
+       echo "" >> $(readlink /proc/$$/fd/2)
       fi
      fi
      
@@ -520,19 +520,19 @@ do
      then
      if [ ! -z ${verbose+x} ] && [ ! -z ${orf+x} ]
      then
-      echo "ORF | frame "$frame > /dev/tty
+      echo "ORF | frame "$frame >> $(readlink /proc/$$/fd/2)
      fi
      if [ ! -z ${verbose+x} ] && [ ! -z ${translate+x} ]
      then
-      echo "Translate | frame "$frame > /dev/tty
+      echo "Translate | frame "$frame >> $(readlink /proc/$$/fd/2)
      fi
      if [ ! -z ${verbose+x} ] && [ $translate_table -ne 1 ]
      then
-      echo "Translation code: "$translate_table > /dev/tty
+      echo "Translation code: "$translate_table >> $(readlink /proc/$$/fd/2)
      fi
      if [ ! -z ${verbose+x} ] && [ ! -z ${min_prot+x} ]
      then
-      echo "Minimum protein length: "$min_prot_length > /dev/tty
+      echo "Minimum protein length: "$min_prot_length >> $(readlink /proc/$$/fd/2)
      fi
      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
      function get_orfs(){
@@ -678,15 +678,15 @@ do
      
      if [ ! -z ${verbose+x} ] && [ $translate -eq 0 ]
      then
-      echo -n "ORF detection done: " > /dev/tty
+      echo -n "ORF detection done: " >> $(readlink /proc/$$/fd/2)
       show_time $(($(date +%s) - time_start))
-      echo "" > /dev/tty
+      echo "" >> $(readlink /proc/$$/fd/2)
      fi
      if [ ! -z ${verbose+x} ] && [ ! -z ${translate+x} ]
      then
-      echo -n "ORF detection and translation done: " > /dev/tty
+      echo -n "ORF detection and translation done: " >> $(readlink /proc/$$/fd/2)
       show_time $(($(date +%s) - time_start))
-      echo "" > /dev/tty
+      echo "" >> $(readlink /proc/$$/fd/2)
      fi
     fi
     
@@ -710,15 +710,15 @@ do
      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
      if [ ! -z ${verbose+x} ]
      then
-      echo "Translate | frame "$frame > /dev/tty
+      echo "Translate | frame "$frame >> $(readlink /proc/$$/fd/2)
      fi
      if [ ! -z ${verbose+x} ] && [ $translate_table -ne 1 ]
      then
-      echo "Translation code: "$translate_table > /dev/tty
+      echo "Translation code: "$translate_table >> $(readlink /proc/$$/fd/2)
      fi
      if [ ! -z ${verbose+x} ] && [ ! -z ${min_prot+x} ]
      then
-      echo "Minimum protein length: "$min_prot_length > /dev/tty
+      echo "Minimum protein length: "$min_prot_length >> $(readlink /proc/$$/fd/2)
      fi
      awk -F '' '{for(i=1; i<=NF; i+=3) {printf "%s%s ", $i,$(i+1)$(i+2);}; print ""}' $INFILE |
       translate |
@@ -735,16 +735,16 @@ do
        fi > $OUTFILE
        if [ ! -z ${verbose+x} ]
        then
-        echo -n "Translation done: " > /dev/tty
+        echo -n "Translation done: " >> $(readlink /proc/$$/fd/2)
         show_time $(($(date +%s) - time_start))
-        echo "" > /dev/tty
+        echo "" >> $(readlink /proc/$$/fd/2)
        fi
     fi
     
      # GC content
      if [ ! -z ${verbose+x} ] && [ ! -z ${percent_GC+x} ]
      then
-      echo "Percent GC" > /dev/tty
+      echo "Percent GC" >> $(readlink /proc/$$/fd/2)
      fi
      
      if [ ! -z ${percent_GC+x} ]
@@ -753,9 +753,9 @@ do
       paste $HEADERS <(awk '{var=length($0);gsub("[AaTt]","",$0);print length($0)/var*100}' $INFILE)
       if [ ! -z ${verbose+x} ]
       then
-       echo -n "GC fraction done: " > /dev/tty
+       echo -n "GC fraction done: " >> $(readlink /proc/$$/fd/2)
        show_time $(($(date +%s) - time_start))
-       echo "" > /dev/tty
+       echo "" >> $(readlink /proc/$$/fd/2)
       fi
       exit 0
      fi
@@ -768,13 +768,13 @@ do
      
      if [ ! -z ${verbose+x} ] && [ ! -z ${unique+x} ]
      then
-      echo "Removing duplicates" > /dev/tty
+      echo "Removing duplicates" >> $(readlink /proc/$$/fd/2)
      fi
      if [ ! -z ${unique+x} ]
      then
       SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
       sort --unique --key=2 $INFILE > $OUTFILE
-      echo -n "Remove duplicates done: " > /dev/tty
+      echo -n "Remove duplicates done: " >> $(readlink /proc/$$/fd/2)
       show_time $(($(date +%s) - time_start))
      fi
      
@@ -783,14 +783,14 @@ do
      then
      if [ ! -z ${verbose+x} ]
      then
-      echo "Sort by name" > /dev/tty
+      echo "Sort by name" >> $(readlink /proc/$$/fd/2)
      fi
       SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
       if [ ! -z ${reverse_sort+x} ]
       then
       if [ ! -z ${verbose+x} ]
       then
-       echo "Sort in reverse order" > /dev/tty
+       echo "Sort in reverse order" >> $(readlink /proc/$$/fd/2)
       fi
        sort --reverse --field-separator=$'\t' --key=1 $INFILE > $OUTFILE
       else
@@ -798,9 +798,9 @@ do
       fi
       if [ ! -z ${verbose+x} ]
       then
-       echo -n "Name sort done: " > /dev/tty
+       echo -n "Name sort done: " >> $(readlink /proc/$$/fd/2)
        show_time $(($(date +%s) - time_start))
-       echo "" > /dev/tty
+       echo "" >> $(readlink /proc/$$/fd/2)
       fi
      fi
     
@@ -809,7 +809,7 @@ do
      then
       if [ ! -z ${verbose+x} ]
       then
-       echo "Sort by length" > /dev/tty
+       echo "Sort by length" >> $(readlink /proc/$$/fd/2)
       fi
       SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH    
       awk -F '\t' '{OFS="\t"; print length($2),$0}' $INFILE |
@@ -817,7 +817,7 @@ do
       then
       if [ ! -z ${verbose+x} ]
       then
-       echo "Sort in reverse order" > /dev/tty
+       echo "Sort in reverse order" >> $(readlink /proc/$$/fd/2)
       fi
        sort --numeric-sort --reverse
       else
@@ -826,9 +826,9 @@ do
       cut --fields=2,3 > $OUTFILE
       if [ ! -z ${verbose+x} ]
       then
-       echo -n "Length sort done: " > /dev/tty
+       echo -n "Length sort done: " >> $(readlink /proc/$$/fd/2)
        show_time $(($(date +%s) - time_start))
-       echo "" > /dev/tty
+       echo "" >> $(readlink /proc/$$/fd/2)
       fi
      fi
      
@@ -842,7 +842,7 @@ do
     then
      if [ ! -z ${verbose+x} ]
      then
-      echo $(basename $1)" ---> "$output_file > /dev/tty
+      echo $(basename $1)" ---> "$output_file >> $(readlink /proc/$$/fd/2)
      fi
      cp --force $OUTFILE $output_file
     else
@@ -863,6 +863,6 @@ do
     
     if [ ! -z ${verbose+x} ]
     then
-     echo -ne "\nfastakit done: " > /dev/tty
-     show_time $(($(date +%s) - time_start)) > /dev/tty
+     echo -ne "\nfastakit done: " >> $(readlink /proc/$$/fd/2)
+     show_time $(($(date +%s) - time_start)) >> $(readlink /proc/$$/fd/2)
     fi
