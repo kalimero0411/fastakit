@@ -676,7 +676,7 @@ do
      done
      HEADERS=$HEADERS_TMP
      
-     if [ ! -z ${verbose+x} ] && [ $translate -eq 0 ]
+     if [ ! -z ${verbose+x} ] && [ ! -z ${translate+x} ]
      then
       echo -n "ORF detection done: " >> $(readlink /proc/$$/fd/2)
       show_time $(($(date +%s) - time_start))
