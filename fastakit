@@ -511,7 +511,7 @@ do
      fi
      
      # Change frame
-     if [ $frame -ne 1 ] && [ ! -z ${translate+x} ] || [ $frame -ne 1 ] && [ ! -z ${orf+x} ]
+     if ([ $frame -ne 1 ] && [ ! -z ${translate+x} ]) || ([ $frame -ne 1 ] && [ ! -z ${orf+x} ])
      then
       sed --in-place --regexp-extended 's/^.{'"$(($frame - 1))"'}//g' $OUTFILE
      fi
