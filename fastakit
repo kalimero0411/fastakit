@@ -305,7 +305,6 @@ do
     then
     FILE=$1
     else
-    inplace=0
     stdin=1
     FILE=$(mktemp)
     cat /dev/stdin > $FILE
