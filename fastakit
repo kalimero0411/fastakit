@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 #set -x
 # Default parameters
-singleline=1
 threads=1
 lettercase=0
 max_orf_num=0
@@ -12,7 +11,7 @@ time_start=$(date +%s)
 
 function print_usage(){
  printf "
-fastakit [OPTIONS] FASTA_file.fasta
+fastakit [OPTIONS] Sequence.fasta
 	-o | --out	Output to file (otherwise to stdout)
 	-i | --in-place	Modify file in-place
 	-c | --complement	Complementary sequence
@@ -24,21 +23,20 @@ fastakit [OPTIONS] FASTA_file.fasta
 	--reverse_sort	Sort in reverse order
 	--upper	Sequences to uppercase
 	--lower	Sequences to lowercase
-	--orf	Sequence from first ATG in frame (Default = frame 1)
+	--orf	Sequence from first ATG in frame
 	--max_orf_num #	Maximum number of ORFs to output per sequence
-	--translate	Protein sequences in current frame (Default = frame 1)
+	--translate	Protein sequences in current frame
 	--table #	Translation code (Default = standard code)
-	--frame #	Frame to extract codons (must be 1, 2 or 3; 0 = six frames)
+	--frame #	Frame to extract codons (Frames 1, 2 or 3; 0 = six frames; Default = 1)
 	--min_prot #	Minimum protein size (Assumes --translate)
 	--gc	Get percent GC per sequence (Disables --translate)
 	--rna_dna	Convert RNA to DNA / DNA to RNA (Default = no conversion)
 	--min_max_seq #,#	Minimum/Maximum sequence size (e.g. 10,50 ; 0 to ignore)
-	--check	Check if FASTA file is single line (TRUE = exit 0; FALSE = exit 1)
+	--check	Check if FASTA file is single line
 	-t | --threads #	Number of CPU threads to use (Default = 1)
 	-v | --verbose	Verbose
 	-h | --help	Display help
 	--stats	Calculate basic stats
-	--skip_singleline	Skip changing multi-line FASTA to single-line FASTA
 	--available_codes	Show available translation codes
 
 "
@@ -135,10 +133,6 @@ do
   --table)
   shift
   translate_table=$1 # Alternative translation table
-  shift
-  ;;
-  --skip_singleline)
-  unset singleline # Skip single-line conversion
   shift
   ;;
   --available_codes)
@@ -315,17 +309,16 @@ do
     FILE=$(mktemp)
     cat /dev/stdin > $FILE
     fi
-    
-    if [ ! -z ${check_sl+x} ]
-    then
+
+    if [ ! -z ${check_sl+x} ]; then verbose=1; fi
     if [[ $(grep --count --perl-regexp "^>" $FILE) = $(grep --count --perl-regexp --invert-match "^>" $FILE) ]]
     then
-     echo -e "\nFASTA file is single line\n" >> $(readlink /proc/$$/fd/2)
-     exit 0
+     if [ ! -z ${verbose+x} ]; then echo "FASTA file is single line" >> $(readlink /proc/$$/fd/2); fi
+     if [ ! -z ${check_sl+x} ]; then exit 0; fi
     else
-     echo -e "\nFASTA file is NOT single line\n" >> $(readlink /proc/$$/fd/2)
-     exit 1
-    fi
+     if [ ! -z ${verbose+x} ]; then echo "FASTA file is NOT single line" >> $(readlink /proc/$$/fd/2); fi
+     if [ ! -z ${check_sl+x} ]; then exit 1; fi
+     singleline=1
     fi
     
     HEADERS=$(mktemp)
@@ -405,7 +398,7 @@ do
      echo "Smallest sequence: "$(tail -1 $lengths) >> $(readlink /proc/$$/fd/2)
      echo "Median: "$(awk -v num_seq=$num_seq -v half_num=$half_num 'NR==int(num_seq/2){if(num_seq/2 == int(num_seq/2)) print ($0+half_num)/2; else print $0}' $lengths) >> $(readlink /proc/$$/fd/2)
      echo "Mean: "$(bc <<< "scale=2; $total/$num_seq")
-     echo "GC%: "$(bc <<< "scale=2; $(cat $OUTFILE | tr -d "\n" | tr -d "[AaTt]" | wc -m)*100/$(cat $OUTFILE | tr -d "\n" | wc -m)") >> $(readlink /proc/$$/fd/2)
+     echo "GC%: "$(bc <<< "scale=2; $(cat $OUTFILE | tr -d "\n" | tr -d "[AaTtUu]" | wc -m)*100/$(cat $OUTFILE | tr -d "\n" | wc -m)") >> $(readlink /proc/$$/fd/2)
      echo "N50: "$(awk -v n50_idx=$n50_idx 'NR==n50_idx{print $0}' $lengths) >> $(readlink /proc/$$/fd/2)
      echo "L50: "$n50_idx >> $(readlink /proc/$$/fd/2)
      echo "N90: "$(awk -v n90_idx=$n90_idx 'NR==n90_idx{print $0}' $lengths) >> $(readlink /proc/$$/fd/2)
