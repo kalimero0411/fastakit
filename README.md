@@ -30,7 +30,6 @@ fastakit [OPTIONS] Sequence.fasta
 	--available_codes	Show available translation codes 
 ```
 
-- Single line conversion is the default, use `--skip_singleline` to avoid it.
 - If `--orf` option is selected, each sequence will be divided into individual ORFs from a start to a stop codon in the current frame, or until the end of the sequence.
 - The `--translate` option applies to each ORF only if `--orf` is selected, otherwise it applies to the entire sequence in the current frame, regardless of start/stop codons.
 - The `--length_sort` option applies after ORFs are retrieved and/or sequences are translated.
