@@ -28,7 +28,7 @@ fastakit [OPTIONS] FASTA_file.fasta
 	--max_orf_num #	Maximum number of ORFs to output per sequence
 	--translate	Protein sequences in current frame (Default = frame 1)
 	--table #	Translation code (Default = standard code)
-	--frame #	Frame to extract codons (must be 1, 2 or 3)
+	--frame #	Frame to extract codons (must be 1, 2 or 3; 0 = six frames)
 	--min_prot #	Minimum protein size (Assumes --translate)
 	--gc	Get percent GC per sequence (Disables --translate)
 	--rna_dna	Convert RNA to DNA / DNA to RNA (Default = no conversion)
@@ -287,11 +287,17 @@ do
 }
   
   # Frame exception
-  if [ $frame -lt 1 ] || [ $frame -gt 3 ]
+  if [ $frame -lt 0 ] || [ $frame -gt 3 ]
   then
-   echo "Frame value must be 1, 2 or 3"
+   echo "Frame value must be 0, 1, 2 or 3"
    print_usage
    exit 1
+  fi
+  
+  if [ $frame -eq 0 ]
+  then
+   unset $complement
+   unset $rev_seq
   fi
   
   # Disable translate
@@ -417,7 +423,7 @@ do
      'grep --ignore-case --max-count=1 "T" $OUTFILE > /dev/null && echo "DNA" > $MOL' \
      'grep --ignore-case --max-count=1 "U" $OUTFILE > /dev/null && echo "RNA" > $MOL' &> /dev/null
      MOLECULE=$(cat $MOL)
-     fi
+    fi
      
      if [ ! -z ${random+x} ]
      then
@@ -510,7 +516,7 @@ do
      fi
      
      # Change frame
-     if ([ $frame -ne 1 ] && [ ! -z ${translate+x} ]) || ([ $frame -ne 1 ] && [ ! -z ${orf+x} ])
+     if ([ $frame -gt 1 ] && [ ! -z ${translate+x} ]) || ([ $frame -gt 1 ] && [ ! -z ${orf+x} ])
      then
       sed --in-place --regexp-extended 's/^.{'"$(($frame - 1))"'}//g' $OUTFILE
      fi
@@ -533,26 +539,28 @@ do
      then
       echo "Minimum protein length: "$min_prot_length >> $(readlink /proc/$$/fd/2)
      fi
+     
      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
+     
      function get_orfs(){
      
      local SWITCH
      local ORFstart=$1
      local ORFend=$2
      local orf_core=$3
+     local ORFHEADERS=$(mktemp)
+     local ORFFILE1=$(mktemp)
      local ORFFILE2=$(mktemp)
      local ORFFILE3=$(mktemp)
      local ORFHEADERS2=$(mktemp)
      
      if [[ $threads != 1 ]]
      then
-      local ORFFILE1=$(mktemp)
-      local ORFHEADERS=$(mktemp)
-      sed --quiet ''"$ORFstart"','"$ORFend"'p;'"$(($ORFend + 1))"'q' $INFILE > $ORFFILE1
-      sed --quiet ''"$ORFstart"','"$ORFend"'p;'"$(($ORFend + 1))"'q' $HEADERS > $ORFHEADERS
+      sed --quiet ''"$ORFstart"','"$ORFend"'p;'"$(($ORFend + 1))"'q' $4 > $ORFFILE1
+      sed --quiet ''"$ORFstart"','"$ORFend"'p;'"$(($ORFend + 1))"'q' $5 > $ORFHEADERS
      else
-      local ORFFILE1=$INFILE
-      local ORFHEADERS=$HEADERS
+      cp -f $4 $ORFFILE1
+      cp -f $5 $ORFHEADERS
      fi
      
       # Separate codons and cut to first start and stop codon
@@ -624,12 +632,7 @@ do
       cat $ORFFILE2 >> $OUTFILE
       
       # Cleanup
-      if [[ $threads != 1 ]]
-      then
-      rm --force $ORFFILE1 $ORFHEADERS
-      fi
-      
-      rm --force $ORFFILE2 $ORFFILE3 $ORFHEADERS2
+      rm --force $ORFFILE1 $ORFFILE2 $ORFFILE3 $ORFHEADERS $ORFHEADERS2
      }
      
      # Allocate sequences to requested threads
@@ -660,21 +663,65 @@ do
      done
      
      # Loop for function getting ORFs for multithreading
-     core_ORF=$(mktemp)
      HEADERS_TMP=$(mktemp)
      : > $OUTFILE
-     for ((core=0;core <= $(($threads - 1));core++))
-     do
-      get_orfs ${start[$core]} ${end[$core]} $core &
-      pids[$core]=$!
-     done
+     : > $HEADERS_TMP
      
-     for pid in ${pids[*]}
-     do
-      wait $pid
-     done
+     if [ $frame -ne 0 ]
+     then
+      for ((core=0;core <= $(($threads - 1));core++))
+      do
+       get_orfs ${start[$core]} ${end[$core]} $core $INFILE $HEADERS &
+       pids[$core]=$!
+      done     
+      for pid in ${pids[*]}
+      do
+       wait $pid
+      done
+     else
+      INFILE_revcomp=$(mktemp)
+      HEADERS_frame=$(mktemp)
+      HEADERS_frame_rev=$(mktemp)
+      parallel -a $INFILE -k -j"$threads" --block 30M --pipepart 'rev' |
+      parallel -k -j"$threads" --block 30M --pipe 'tr \"ATCGUatcgu\" \"TAGCAtagca\"' \
+      > $INFILE_revcomp
+      for ((frame_set=1;$frame_set<=3;frame_set++))
+      do
+      if [ $frame_set -gt 1 ]
+      then
+       sed --in-place --regexp-extended 's/^.//g' $INFILE
+       sed --in-place --regexp-extended 's/^.//g' $INFILE_revcomp
+      fi
+       sed --regexp-extended 's/(.+)/\1_frame'"$(($frame_set))"'/g' $HEADERS > $HEADERS_frame
+       sed --regexp-extended 's/(.+)/\1_frame_'"$(($frame_set*2))"'_rev/g' $HEADERS > $HEADERS_frame_rev
+      for ((core=0;core <= $(($threads - 1));core++))
+      do
+       get_orfs ${start[$core]} ${end[$core]} $core $INFILE $HEADERS_frame &
+       pids[$core]=$!
+      done
+      for pid in ${pids[*]}
+      do
+       wait $pid
+      done
+      for ((core=0;core <= $(($threads - 1));core++))
+      do
+       get_orfs ${start[$core]} ${end[$core]} $core $INFILE_revcomp $HEADERS_frame_rev &
+       pids[$core]=$!
+      done
+     
+      for pid in ${pids[*]}
+      do
+       wait $pid
+      done
+      done
+      
+      # Cleanup
+      rm --force $INFILE_revcomp $HEADERS_frame $HEADERS_frame_rev
+     fi
+     
+     rm --force $HEADERS
      HEADERS=$HEADERS_TMP
-     
+
      if [ ! -z ${verbose+x} ] && [ ! -z ${translate+x} ]
      then
       echo -n "ORF detection done: " >> $(readlink /proc/$$/fd/2)
@@ -854,7 +901,7 @@ do
     fi
     
     # Cleanup temp files
-    rm --force $INFILE $OUTFILE $HEADERS $MOL $core_ORF
+    rm --force $INFILE $OUTFILE $HEADERS $MOL
     if [ ! -z ${stdin+x} ]
     then
      rm --force $FILE
