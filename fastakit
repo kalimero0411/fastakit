@@ -374,8 +374,20 @@ do
      
     # Skip single line conversion
     else
-     parallel -a $FILE -k -j"$threads" --block 30M --pipepart 'grep --perl-regexp --invert-match "^>"' > $OUTFILE
-     if [ ! -z ${verbose+x} ]
+    if [[ $lettercase = 0 ]]
+    then
+     parallel -a $FILE -k -j"$threads" --block 30M --pipepart 'grep --perl-regexp --invert-match "^>"'
+     > $OUTFILE
+    elif [[ $lettercase = 1 ]]
+    then
+     parallel -a $FILE -k -j"$threads" --block 30M --pipepart 'grep --perl-regexp --invert-match "^>"' |
+     tr "[:lower:]" "[:upper:]" > $OUTFILE
+    elif [[ $lettercase = 2 ]]
+    then
+     parallel -a $FILE -k -j"$threads" --block 30M --pipepart 'grep --perl-regexp --invert-match "^>"' |
+     tr "[:upper:]" "[:lower:]" > $OUTFILE
+    fi
+    if [ ! -z ${verbose+x} ]
      then
       echo -n "Loading sequence done: " >> $(readlink /proc/$$/fd/2)
       show_time $(($(date +%s) - time_start))
