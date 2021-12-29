@@ -339,7 +339,8 @@ do
     fi
     fi
     
-    grep --perl-regexp "^>" $FILE > $HEADERS &
+    grep --perl-regexp "^>" $FILE |
+    sed --regexp-extended 's/\r//g' > $HEADERS &
     if [ ! -z ${singleline+x} ]
     then
     if [[ $lettercase = 0 ]]
