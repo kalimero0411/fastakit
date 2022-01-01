@@ -402,7 +402,7 @@ do
      awk '{print length($0)}' $OUTFILE | sort -rn > $lengths
      total=$(awk '{OFS="\t"}; {sum+=$0}; END{printf "%.0f", sum}' $lengths)
      n50_idx=$(awk '{OFS="\t"}; {sum+=$0}; {printf "%s%s%.0f\n", NR,OFS,sum}' $lengths | awk -v total=$total -F $'\t' '{if($2 > (total*0.5))printf "%.0f\n", $1}' | head -1)
-     n90_idx=$(awk '{OFS="\t"}; {sum+=$0}; {printf "%.0f\n", sum}' $lengths | awk -v total=$total -F $'\t' '{if($2 > (total*0.9))printf "%.0f\n", $1}' | head -1)
+     n90_idx=$(awk '{OFS="\t"}; {sum+=$0}; {printf "%s%s%.0f\n", NR,OFS,sum}' $lengths | awk -v total=$total -F $'\t' '{if($2 > (total*0.9))printf "%.0f\n", $1}' | head -1)
      num_seq=$(cat $lengths | wc -l)
      half_num=$(awk -v num_seq=$num_seq 'NR==(int(num_seq/2)+1){printf $0}' $lengths)
      echo "Total length: "$total >> $(readlink /proc/$$/fd/2)
