@@ -37,6 +37,7 @@ fastakit [OPTIONS] Sequence.fasta
 	-v | --verbose	Verbose
 	-h | --help	Display help
 	--stats	Calculate basic stats
+	--version	Print version date
 	--available_codes	Show available translation codes
 
 "
@@ -137,6 +138,10 @@ do
   ;;
   --available_codes)
   tables
+  exit 0
+  ;;
+  --version)
+  cat "Version date 22.02" >> $(readlink /proc/$$/fd/2)
   exit 0
   ;;
   --check)
