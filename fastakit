@@ -141,7 +141,7 @@ do
   exit 0
   ;;
   --version)
-  cat "Version date 22.02" >> $(readlink /proc/$$/fd/2)
+  echo "fastakit version 22.02" >> $(readlink /proc/$$/fd/2)
   exit 0
   ;;
   --check)
