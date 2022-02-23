@@ -320,13 +320,14 @@ do
     OUTFILE=$(mktemp)
     
     if [ ! -z ${verbose+x} ]; then echo -en "Using "$threads" thread(s)...\n\n" >> $(readlink /proc/$$/fd/2); fi
-
+    grep --perl-regexp "^>" $FILE |
+    sed --regexp-extended 's/\r//g' > $HEADERS
+    
     if [[ $(grep --count --perl-regexp "^>" $FILE) != $(grep --count --perl-regexp --invert-match "^>" $FILE) ]]
     then
      if [ ! -z ${verbose+x} ]; then echo "FASTA file is NOT single line" >> $(readlink /proc/$$/fd/2); fi
      if [ ! -z ${check_sl+x} ]; then exit 1; fi
-    grep --perl-regexp "^>" $FILE |
-    sed --regexp-extended 's/\r//g' > $HEADERS &
+
 
     if [[ $lettercase = 0 ]]
     then
