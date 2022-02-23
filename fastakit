@@ -315,17 +315,6 @@ do
     cat /dev/stdin > $FILE
     fi
 
-    if [ ! -z ${check_sl+x} ]; then verbose=1; fi
-    if [[ $(grep --count --perl-regexp "^>" $FILE) = $(grep --count --perl-regexp --invert-match "^>" $FILE) ]]
-    then
-     if [ ! -z ${verbose+x} ]; then echo "FASTA file is single line" >> $(readlink /proc/$$/fd/2); fi
-     if [ ! -z ${check_sl+x} ]; then exit 0; fi
-    else
-     if [ ! -z ${verbose+x} ]; then echo "FASTA file is NOT single line" >> $(readlink /proc/$$/fd/2); fi
-     if [ ! -z ${check_sl+x} ]; then exit 1; fi
-     singleline=1
-    fi
-    
     HEADERS=$(mktemp)
     INFILE=$(mktemp)
     OUTFILE=$(mktemp)
@@ -344,10 +333,13 @@ do
     fi
     fi
     
+    if [[ $(grep --count --perl-regexp "^>" $FILE) != $(grep --count --perl-regexp --invert-match "^>" $FILE) ]]
+    then
+     if [ ! -z ${verbose+x} ]; then echo "FASTA file is NOT single line" >> $(readlink /proc/$$/fd/2); fi
+     if [ ! -z ${check_sl+x} ]; then exit 1; fi
     grep --perl-regexp "^>" $FILE |
     sed --regexp-extended 's/\r//g' > $HEADERS &
-    if [ ! -z ${singleline+x} ]
-    then
+
     if [[ $lettercase = 0 ]]
     then
      sed --regexp-extended 's/\r//g' $FILE |
@@ -380,6 +372,8 @@ do
      
     # Skip single line conversion
     else
+     if [ ! -z ${verbose+x} ]; then echo "FASTA file is single line" >> $(readlink /proc/$$/fd/2); fi
+     if [ ! -z ${check_sl+x} ]; then exit 0; fi
     if [[ $lettercase = 0 ]]
     then
      parallel -a $FILE -k -j"$threads" --block 30M --pipepart 'grep --perl-regexp --invert-match "^>"'
