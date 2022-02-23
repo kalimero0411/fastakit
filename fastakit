@@ -321,18 +321,6 @@ do
     
     if [ ! -z ${verbose+x} ]; then echo -en "Using "$threads" thread(s)...\n\n" >> $(readlink /proc/$$/fd/2); fi
 
-    # Create single line FASTA and change to specified case
-    if [ ! -z ${verbose+x} ]; then
-    if [ ! -z ${singleline+x} ]; then
-    if [[ $lettercase = 0 ]]; then echo "Converting to single line FASTA..." >> $(readlink /proc/$$/fd/2)
-     elif [[ $lettercase = 1 ]]; then echo "Converting to upper-case single line FASTA..." >> $(readlink /proc/$$/fd/2)
-     elif [[ $lettercase = 2 ]]; then echo "Converting to lower-case single line FASTA..." >> $(readlink /proc/$$/fd/2)
-    fi
-    else
-     echo "Skipping single line FASTA conversion..." >> $(readlink /proc/$$/fd/2)
-    fi
-    fi
-    
     if [[ $(grep --count --perl-regexp "^>" $FILE) != $(grep --count --perl-regexp --invert-match "^>" $FILE) ]]
     then
      if [ ! -z ${verbose+x} ]; then echo "FASTA file is NOT single line" >> $(readlink /proc/$$/fd/2); fi
@@ -342,6 +330,7 @@ do
 
     if [[ $lettercase = 0 ]]
     then
+     if [ ! -z ${verbose+x} ]; then echo "Converting to single line FASTA..." >> $(readlink /proc/$$/fd/2); fi
      sed --regexp-extended 's/\r//g' $FILE |
      perl -pe '$. > 1 and /^>/ ? print "\n" : chomp' |
      grep --perl-regexp --invert-match "^>" > $OUTFILE
@@ -349,6 +338,7 @@ do
     # Convert to upper-case
     elif [[ $lettercase = 1 ]]
      then
+      if [ ! -z ${verbose+x} ]; then echo "Converting to upper-case single line FASTA..." >> $(readlink /proc/$$/fd/2); fi
       sed --regexp-extended 's/\r//g' $FILE |
       perl -pe '$. > 1 and /^>/ ? print "\n" : chomp' |
       grep --perl-regexp --invert-match "^>" |
@@ -357,6 +347,7 @@ do
     # Convert to lower-case
      elif [[ $lettercase = 2 ]]
       then
+       if [ ! -z ${verbose+x} ]; then echo "Converting to lower-case single line FASTA..." >> $(readlink /proc/$$/fd/2); fi
        sed --regexp-extended 's/\r//g' $FILE |
        perl -pe '$. > 1 and /^>/ ? print "\n" : chomp' |
        grep --perl-regexp --invert-match "^>" |
@@ -372,7 +363,11 @@ do
      
     # Skip single line conversion
     else
-     if [ ! -z ${verbose+x} ]; then echo "FASTA file is single line" >> $(readlink /proc/$$/fd/2); fi
+     if [ ! -z ${verbose+x} ]
+     then
+     echo "FASTA file is single line" >> $(readlink /proc/$$/fd/2)
+     echo "Skipping single line FASTA conversion..." >> $(readlink /proc/$$/fd/2)
+     fi
      if [ ! -z ${check_sl+x} ]; then exit 0; fi
     if [[ $lettercase = 0 ]]
     then
@@ -380,10 +375,12 @@ do
      > $OUTFILE
     elif [[ $lettercase = 1 ]]
     then
+     if [ ! -z ${verbose+x} ]; then echo "Converting to upper-case FASTA..." >> $(readlink /proc/$$/fd/2); fi
      parallel -a $FILE -k -j"$threads" --block 30M --pipepart 'grep --perl-regexp --invert-match "^>"' |
      tr "[:lower:]" "[:upper:]" > $OUTFILE
     elif [[ $lettercase = 2 ]]
     then
+     if [ ! -z ${verbose+x} ]; then echo "Converting to lower-case FASTA..." >> $(readlink /proc/$$/fd/2); fi
      parallel -a $FILE -k -j"$threads" --block 30M --pipepart 'grep --perl-regexp --invert-match "^>"' |
      tr "[:upper:]" "[:lower:]" > $OUTFILE
     fi
