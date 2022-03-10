@@ -3,15 +3,13 @@
 # Default parameters
 threads=1
 lettercase=0
-max_orf_num=0
-min_max_seq_length=(0 0)
 frame=1
 translate_table=1
 time_start=$(date +%s)
 
 function print_usage(){
  printf "
-fastakit [OPTIONS] Sequence.fasta
+fastakit [OPTIONS] [Sequence.fasta | standard input]
 	-o | --out	Output to file (otherwise to stdout)
 	-i | --in-place	Modify file in-place
 	-c | --complement	Complementary sequence
@@ -38,32 +36,26 @@ fastakit [OPTIONS] Sequence.fasta
 	-h | --help	Display help
 	--stats	Calculate basic stats
 	--version	Print version date
-	--available_codes	Show available translation codes
 
-"
-}
 
-# Alternative tables
-function tables(){
-printf "
 	Available translation codes:
 	1 - Standard code
 	2 - Vertebrate Mitochondrial code
 	3 - Yeast mitochondrial code
 	4 - Mold, protozoan, and coelenterate mitochondrial code and the mycoplasma/spiroplasma code
-
+	
 "
 }
 
 # Check arguments
-for arg in "$@"
+while [ "$#" -gt 0 ]
 do
+arg=$1
  case $arg in
   -o | --out)
   out=1 # Output to file
-  shift
-  output_file=$1
-  shift
+  output_file=$2
+  shift 2
   ;;
   -i | --in-place)
   inplace=1 # Modify file in-place
@@ -105,19 +97,17 @@ do
   rev_seq=1 # Reverse sequences
   shift
   ;;
-  --frame)
-  shift # Set frame for codons
-  frame=$1
-  shift
+  --frame) # Set frame for codons
+  frame=$2
+  shift 2
   ;;
   --orf)
   orf=1 # Sequence from first ATG in frame
   shift
   ;;
   --max_orf_num)
-  shift
-  max_orf_num=$1 # Maximum number of ORFs per sequence
-  shift
+  max_orf_num=$2 # Maximum number of ORFs per sequence
+  shift 2
   ;;
   --translate)
   translate=1 # Translate sequences
@@ -132,16 +122,11 @@ do
   shift
   ;;
   --table)
-  shift
-  translate_table=$1 # Alternative translation table
-  shift
-  ;;
-  --available_codes)
-  tables
-  exit 0
+  translate_table=$2 # Alternative translation table
+  shift 2
   ;;
   --version)
-  echo "fastakit version 22.02" >> $(readlink /proc/$$/fd/2)
+  echo "fastakit version 22.03" >> $(readlink /proc/$$/fd/2)
   exit 0
   ;;
   --check)
@@ -151,19 +136,16 @@ do
   --min_prot)
   min_prot=1 # Minimum protein size
   translate=1 # Translate sequences
-  shift
-  min_prot_length=$1
-  shift
+  min_prot_length=$2
+  shift 2
   ;;
   --min_max_seq)
-  shift
-  IFS="," min_max_seq_length=($(echo "$1")) # Minimum/Maximum nucleotide sequence size
-  shift
+  IFS="," min_max_seq_length=($(echo "$2")) # Minimum/Maximum nucleotide sequence size
+  shift 2
   ;;
   -t | --threads)
-  shift
-  threads=$1 # Number of CPU threads
-  shift
+  threads=$2 # Number of CPU threads
+  shift 2
   ;;
   --stats)
   stats=1 # Calculate basic stats
@@ -178,6 +160,15 @@ do
   exit 1
   ;;
   *)
+  if [ -f "$1" ]
+  then
+   break
+  else
+  echo "Unknown option: "$1
+  print_usage
+  exit 1
+  fi
+  ;;
   esac
   done
   
@@ -305,7 +296,7 @@ do
    unset translate
   fi
   
-    # Create temp files
+    # Get input files
     if [ $# -ge 1 -a -f "$1" ]
     then
     FILE="$1"
@@ -577,7 +568,7 @@ do
       if [ ! -z ${translate+x} ]
       then
        translate |
-       sed --regexp-extended 's/[atcgu]{1,}$//g' |
+       sed --regexp-extended 's/[actgu]//g' |
        tr -d " " |
        if [ ! -z ${min_prot+x} ]
        then
@@ -596,7 +587,7 @@ do
       while [ $(grep --ignore-case --perl-regexp --count "a[tu]g" $ORFFILE1) -ne 0 ]
       do
       orf_num=$(($orf_num + 1))
-      if [ $max_orf_num -ne 0 ] && [ $orf_num -gt $max_orf_num ]
+      if [ $threads -eq 1 ] && [ ! -z ${max_orf_num+x} ] && [ $orf_num -gt $max_orf_num ]
       then
        break
       fi
@@ -614,7 +605,7 @@ do
        if [ ! -z ${translate+x} ]
        then
         translate |
-        sed --regexp-extended 's/[atcgu]{1,}$//g' |
+        sed --regexp-extended 's/[actgu]//g' |
         tr -d " " |
         if [ ! -z ${min_prot+x} ]
         then
@@ -637,6 +628,13 @@ do
       # Cleanup
       rm --force $ORFFILE1 $ORFFILE2 $ORFFILE3 $ORFHEADERS $ORFHEADERS2
      }
+     
+     # Set Minimum protein length if minimum nucleotide size is set
+     if [ ! -z ${min_max_seq_length+x} ] && [ ! -z ${translate+x} ]
+     then
+      min_prot=1
+      min_prot_length=$((${min_max_seq_length[0]}/3))
+     fi
      
      # Allocate sequences to requested threads
      seq_num=$(grep --perl-regexp --count "^>" $HEADERS)
@@ -722,8 +720,16 @@ do
       rm --force $INFILE_revcomp $HEADERS_frame $HEADERS_frame_rev
      fi
      
-     rm --force $HEADERS
-     HEADERS=$HEADERS_TMP
+     if [ $threads -gt 1 ] && [ ! -z ${max_orf_num+x} ]
+     then
+      head --lines $max_orf_num $HEADERS_TMP > $HEADERS
+      rm --force $HEADERS_TMP
+      head --lines $max_orf_num $OUTFILE > $INFILE
+      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
+     else
+      rm --force $HEADERS
+      HEADERS=$HEADERS_TMP
+     fi
 
      if [ ! -z ${verbose+x} ] && [ ! -z ${translate+x} ]
      then
@@ -739,17 +745,20 @@ do
      fi
     fi
     
-    # Minimum length (nucleotide)
+    # Minimum/Maximum length (nucleotie)
+     if [ ! -z ${min_max_seq_length+x} ] && [ -z ${translate+x} ]
+     then
      if [ ${min_max_seq_length[0]} -gt 0 ] || [ ${min_max_seq_length[1]} -gt 0 ]
      then
      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
      if [ ${min_max_seq_length[1]} -eq 0 ]
      then
-      awk -v min_seq_length="${min_max_seq_length[0]}" '{if(length($0) - 1 >= min_seq_length) print $0;
-      else print ""}' $INFILE > $OUTFILE
+       awk -v min_seq_length="${min_max_seq_length[0]}" '{if(length($0) - 1 >= min_seq_length) print $0;
+       else print ""}' $INFILE > $OUTFILE
      else
       awk -v min_seq_length="${min_max_seq_length[0]}" -v max_seq_length="${min_max_seq_length[1]}" '{if(length($0) - 1 >= min_seq_length && length($0) - 1 <= max_seq_length) print $0;
       else print ""}' $INFILE > $OUTFILE
+     fi
      fi
      fi
     
