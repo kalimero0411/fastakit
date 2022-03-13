@@ -15,6 +15,7 @@ fastakit [OPTIONS] [Sequence.fasta | standard input]
 	-c | --complement	Complementary sequence
 	-m | --reverse_seq	Reverse sequence
 	--unique	Remove duplicate sequences
+	--multi #	Convert to multi-line FASTA (nucleotide only)
 	--random	Create random sequences of respective length
 	--name_sort	Sort FASTA by name
 	--length_sort	Sort FASTA by sequence length (shortest to longest)
@@ -150,6 +151,11 @@ arg=$1
   --stats)
   stats=1 # Calculate basic stats
   shift
+  ;;
+  --multi)
+  multi=1 # Covert to multiline FASTA
+  multi_length=$2
+  shift 2
   ;;
   -v | --verbose)
   verbose=1 # Print file names and arguments
@@ -311,11 +317,17 @@ arg=$1
     OUTFILE=$(mktemp)
     
     if [ ! -z ${verbose+x} ]; then echo -en "Using "$threads" thread(s)...\n\n" >> $(readlink /proc/$$/fd/2); fi
-    grep --perl-regexp "^>" $FILE |
-    sed --regexp-extended 's/\r//g' > $HEADERS
-    
+
     if [[ $(grep --count --perl-regexp "^>" $FILE) != $(grep --count --perl-regexp --invert-match "^>" $FILE) ]]
     then
+    if [ ! -z ${multi+x} ]
+    then
+     echo "Error: FASTA file is already multi-line" >> $(readlink /proc/$$/fd/2)
+     exit 1
+    fi
+    parallel -a $FILE -k -j"$threads" --block 30M --pipepart 'grep --perl-regexp "^>"' |
+    sed --regexp-extended 's/\r//g' > $HEADERS
+    
      if [ ! -z ${verbose+x} ]; then echo "FASTA file is NOT single line" >> $(readlink /proc/$$/fd/2); fi
      if [ ! -z ${check_sl+x} ]; then exit 1; fi
 
@@ -355,12 +367,58 @@ arg=$1
      
     # Skip single line conversion
     else
+    
+    # Convert to Multi-line FASTA
+    if [ ! -z ${multi+x} ]
+     then
+     if [ ! -z ${verbose+x} ]; then echo "Converting to multi line FASTA..." >> $(readlink /proc/$$/fd/2); fi
+      if [ $(grep --count --perl-regexp --ignore-case "^>.+[ACTGU]{$multi_length}" $FILE) -eq 0 ]
+      then
+       sed --regexp-extended "s/\r//g; s/([ACTGUactgu]{$multi_length})/\1\n/g" $FILE > $OUTFILE
+      else
+       sed --regexp-extended "s/(^>.+?)[ACTGUactgu]{$multi_length,}/\1/g" $FILE |
+       sed --regexp-extended "s/\r//g; s/([ACTGUactgu]{$multi_length})/\1\n/g" > $OUTFILE
+      fi
+      # Output to file or stdout
+    if [ ! -z ${out+x} ]
+    then
      if [ ! -z ${verbose+x} ]
      then
-     echo "FASTA file is single line" >> $(readlink /proc/$$/fd/2)
-     echo "Skipping single line FASTA conversion..." >> $(readlink /proc/$$/fd/2)
+      echo $(basename $1)" ---> "$output_file >> $(readlink /proc/$$/fd/2)
      fi
+     cp --force $OUTFILE $output_file
+    else
+     if [ ! -z ${inplace+x} ]
+     then
+      cp --force $OUTFILE $FILE
+     else
+      cat $OUTFILE
+     fi
+    fi
+    
+    # Cleanup temp files
+    rm --force $OUTFILE $INFILE $HEADERS
+    if [ ! -z ${stdin+x} ]
+    then
+     rm --force $FILE
+    fi
+    
+    if [ ! -z ${verbose+x} ]
+    then
+     echo -ne "\nfastakit done: " >> $(readlink /proc/$$/fd/2)
+     show_time $(($(date +%s) - time_start)) >> $(readlink /proc/$$/fd/2)
+    fi
+    exit 0
+    
+    else
+    
+    # Just load single-line sequences
+    parallel -a $FILE -k -j"$threads" --block 30M --pipepart 'grep --perl-regexp "^>"' |
+    sed --regexp-extended 's/\r//g' > $HEADERS
+    
+     if [ ! -z ${verbose+x} ]; then echo "FASTA file is single line" >> $(readlink /proc/$$/fd/2); fi
      if [ ! -z ${check_sl+x} ]; then exit 0; fi
+     if [ ! -z ${verbose+x} ]; then echo "Skipping single line FASTA conversion..." >> $(readlink /proc/$$/fd/2); fi
     if [[ $lettercase = 0 ]]
     then
      parallel -a $FILE -k -j"$threads" --block 30M --pipepart 'grep --perl-regexp --invert-match "^>"' \
@@ -382,6 +440,7 @@ arg=$1
       show_time $(($(date +%s) - time_start))
       echo "" >> $(readlink /proc/$$/fd/2)
      fi
+    fi
     fi
     
     if [ ! -z ${stats+x} ]
