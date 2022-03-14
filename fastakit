@@ -376,8 +376,7 @@ arg=$1
       then
        sed --regexp-extended "s/\r//g; s/([ACTGUactgu]{$multi_length})/\1\n/g" $FILE > $OUTFILE
       else
-       sed --regexp-extended "s/(^>.+?)[ACTGUactgu]{$multi_length,}/\1/g" $FILE |
-       sed --regexp-extended "s/\r//g; s/([ACTGUactgu]{$multi_length})/\1\n/g" > $OUTFILE
+       awk -F "" -v multi_length="$multi_length" '/>/{print $0}; !/>/{for(i=1; i<=NF; i+=multi_length) {print substr($0,i,multi_length);}}' $FILE > $OUTFILE
       fi
       # Output to file or stdout
     if [ ! -z ${out+x} ]
