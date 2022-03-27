@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #set -x
 # Default parameters
-threads=1
+threads=$(command -v nproc --all &> /dev/null && nproc || echo 1)
 lettercase=0
 frame=1
 translate_table=1
@@ -29,10 +29,12 @@ fastakit [OPTIONS] [Sequence.fasta | standard input]
 	--frame #	Frame to extract codons (Frames 1, 2 or 3; 0 = six frames; Default = 1)
 	--min_prot #	Minimum protein size (Assumes --translate)
 	--gc	Get percent GC per sequence (Disables --translate)
+	--separate DIR	Separate sequnces into files in directory DIR
+	--nonnuc	Non-ACTGU characters (0 ignored)
 	--rna_dna	Convert RNA to DNA / DNA to RNA (Default = no conversion)
 	--min_max_seq #,#	Minimum/Maximum sequence size (e.g. 10,50 ; 0 to ignore)
 	--check	Check if FASTA file is single line
-	-t | --threads #	Number of CPU threads to use (Default = 1)
+	-t | --threads #	Number of CPU threads to use (Default = Detected processors or 1)
 	-v | --verbose	Verbose
 	-h | --help	Display help
 	--stats	Calculate basic stats
@@ -121,6 +123,14 @@ arg=$1
   --rna_dna)
   rna_dna=1 # Convert RNA to DNA / DNA to RNA
   shift
+  ;;
+  --nonnuc)
+  nonnuc=1 # Count non-ACTGU characters
+  shift
+  ;;
+  --separate)
+  separate=$2 # Separate sequnces into files
+  shift 2
   ;;
   --table)
   translate_table=$2 # Alternative translation table
@@ -318,15 +328,11 @@ arg=$1
     
     if [ ! -z ${verbose+x} ]; then echo -en "Using "$threads" thread(s)...\n\n" >> $(readlink /proc/$$/fd/2); fi
 
-    if [[ $(grep --count --perl-regexp "^>" $FILE) != $(grep --count --perl-regexp --invert-match "^>" $FILE) ]]
-    then
-    if [ ! -z ${multi+x} ]
-    then
-     echo "Error: FASTA file is already multi-line" >> $(readlink /proc/$$/fd/2)
-     exit 1
-    fi
     parallel -a $FILE -k -j"$threads" --block 30M --pipepart 'grep --perl-regexp "^>"' |
     sed --regexp-extended 's/\r//g' > $HEADERS
+    
+    if [[ $(grep --count --perl-regexp "^>" $FILE) != $(grep --count --perl-regexp --invert-match "^>" $FILE) ]]
+    then
     
      if [ ! -z ${verbose+x} ]; then echo "FASTA file is NOT single line" >> $(readlink /proc/$$/fd/2); fi
      if [ ! -z ${check_sl+x} ]; then exit 1; fi
@@ -368,52 +374,7 @@ arg=$1
     # Skip single line conversion
     else
     
-    # Convert to Multi-line FASTA
-    if [ ! -z ${multi+x} ]
-     then
-     if [ ! -z ${verbose+x} ]; then echo "Converting to multi line FASTA..." >> $(readlink /proc/$$/fd/2); fi
-      if [ $(grep --count --perl-regexp --ignore-case "^>.+[ACTGU]{$multi_length}" $FILE) -eq 0 ]
-      then
-       sed --regexp-extended "s/\r//g; s/([ACTGUactgu]{$multi_length})/\1\n/g" $FILE > $OUTFILE
-      else
-       awk -F "" -v multi_length="$multi_length" '/>/{print $0}; !/>/{for(i=1; i<=NF; i+=multi_length) {print substr($0,i,multi_length);}}' $FILE > $OUTFILE
-      fi
-      # Output to file or stdout
-    if [ ! -z ${out+x} ]
-    then
-     if [ ! -z ${verbose+x} ]
-     then
-      echo $(basename $1)" ---> "$output_file >> $(readlink /proc/$$/fd/2)
-     fi
-     cp --force $OUTFILE $output_file
-    else
-     if [ ! -z ${inplace+x} ]
-     then
-      cp --force $OUTFILE $FILE
-     else
-      cat $OUTFILE
-     fi
-    fi
-    
-    # Cleanup temp files
-    rm --force $OUTFILE $INFILE $HEADERS
-    if [ ! -z ${stdin+x} ]
-    then
-     rm --force $FILE
-    fi
-    
-    if [ ! -z ${verbose+x} ]
-    then
-     echo -ne "\nfastakit done: " >> $(readlink /proc/$$/fd/2)
-     show_time $(($(date +%s) - time_start)) >> $(readlink /proc/$$/fd/2)
-    fi
-    exit 0
-    
-    else
-    
     # Just load single-line sequences
-    parallel -a $FILE -k -j"$threads" --block 30M --pipepart 'grep --perl-regexp "^>"' |
-    sed --regexp-extended 's/\r//g' > $HEADERS
     
      if [ ! -z ${verbose+x} ]; then echo "FASTA file is single line" >> $(readlink /proc/$$/fd/2); fi
      if [ ! -z ${check_sl+x} ]; then exit 0; fi
@@ -440,6 +401,65 @@ arg=$1
       echo "" >> $(readlink /proc/$$/fd/2)
      fi
     fi
+    
+     # Convert to Multi-line FASTA
+    if [ ! -z ${multi+x} ]
+     then
+     if [ ! -z ${verbose+x} ]; then echo "Converting to multi line FASTA..." >> $(readlink /proc/$$/fd/2); fi
+     SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
+     paste $HEADERS $INFILE |
+     grep --perl-regexp --invert-match "\t$" |
+     tr "\t" "\n" |
+      if [ $(grep --count --perl-regexp --ignore-case "^>.+[ACTGU]{$multi_length}" $HEADERS) -eq 0 ]
+      then
+       sed --regexp-extended "s/\r//g; s/([ACTGUactgu]{$multi_length})/\1\n/g"
+      else
+       awk -F "" -v multi_length="$multi_length" '/>/{print $0}; !/>/{for(i=1; i<=NF; i+=multi_length) {print substr($0,i,multi_length);}}'
+      fi > $OUTFILE
+      # Output to file or stdout
+    if [ ! -z ${out+x} ]
+    then
+     if [ ! -z ${verbose+x} ]
+     then
+      echo $(basename $1)" ---> "$output_file >> $(readlink /proc/$$/fd/2)
+     fi
+     cp --force $OUTFILE $output_file
+    else
+     if [ ! -z ${inplace+x} ]
+     then
+      cp --force $OUTFILE $FILE
+     else
+      cat $OUTFILE
+     fi
+    fi
+    
+    # Cleanup temp files
+    rm --force $OUTFILE $INFILE $HEADERS
+    if [ ! -z ${stdin+x} ]
+    then
+     rm --force $FILE
+    fi
+    
+    if [ ! -z ${verbose+x} ]
+    then
+     echo -ne "\nMulti line conversion done: " >> $(readlink /proc/$$/fd/2)
+     show_time $(($(date +%s) - time_start)) >> $(readlink /proc/$$/fd/2)
+    fi
+    exit 0
+    fi
+    
+    if [ ! -z ${nonnuc+x} ]
+    then
+     SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
+     paste <(cat $HEADERS | tr -d ">") <(cat $INFILE | tr -d "ACTGUactgu" | awk '{print length($0)}') |
+     grep --invert-match --perl-regexp "\t0"
+     if [ ! -z ${verbose+x} ]
+      then
+       echo -n "Non-ACTGU done: " >> $(readlink /proc/$$/fd/2)
+       show_time $(($(date +%s) - time_start))
+       echo "" >> $(readlink /proc/$$/fd/2)
+      fi
+     exit 0
     fi
     
     if [ ! -z ${stats+x} ]
@@ -518,7 +538,7 @@ arg=$1
       fi
      fi
      
-     # DNA-to-RNA or RNA-to-DNA      
+     # DNA-to-RNA or RNA-to-DNA
      if [ ! -z ${rna_dna+x} ]
      then
       SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
@@ -550,7 +570,7 @@ arg=$1
       fi
      fi
 
-     # Get reverse sequences     
+     # Get reverse sequences
      if [ ! -z ${rev_seq+x} ]
      then
       if [ ! -z ${verbose+x} ]
@@ -644,8 +664,8 @@ arg=$1
       # Loop over other ORFs
       while [ $(grep --ignore-case --perl-regexp --count "a[tu]g" $ORFFILE1) -ne 0 ]
       do
-      orf_num=$(($orf_num + 1))
-      if [ $threads -eq 1 ] && [ ! -z ${max_orf_num+x} ] && [ $orf_num -gt $max_orf_num ]
+      ((orf_num++))
+      if [ $threads -gt 0 ] && [ ! -z ${max_orf_num+x} ] && [ $orf_num -gt $max_orf_num ]
       then
        break
       fi
@@ -778,18 +798,10 @@ arg=$1
       rm --force $INFILE_revcomp $HEADERS_frame $HEADERS_frame_rev
      fi
      
-     if [ $threads -gt 1 ] && [ ! -z ${max_orf_num+x} ]
-     then
-      head --lines $max_orf_num $HEADERS_TMP > $HEADERS
-      rm --force $HEADERS_TMP
-      head --lines $max_orf_num $OUTFILE > $INFILE
-      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
-     else
-      rm --force $HEADERS
-      HEADERS=$HEADERS_TMP
-     fi
+     rm --force $HEADERS
+     HEADERS=$HEADERS_TMP
 
-     if [ ! -z ${verbose+x} ] && [ ! -z ${translate+x} ]
+     if [ ! -z ${verbose+x} ] && [ -z ${translate+x} ]
      then
       echo -n "ORF detection done: " >> $(readlink /proc/$$/fd/2)
       show_time $(($(date +%s) - time_start))
@@ -866,7 +878,7 @@ arg=$1
      if [ ! -z ${percent_GC+x} ]
      then
      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
-      paste $HEADERS <(awk '{var=length($0);gsub("[AaTt]","",$0);print length($0)/var*100}' $INFILE)
+      paste <(cat $HEADERS | tr -d ">") <(awk '{var=length($0);gsub("[AaTt]","",$0);print length($0)/var*100}' $INFILE)
       if [ ! -z ${verbose+x} ]
       then
        echo -n "GC fraction done: " >> $(readlink /proc/$$/fd/2)
@@ -882,18 +894,17 @@ arg=$1
      grep --perl-regexp --invert-match "\t$" > $OUTFILE
 
      
-     if [ ! -z ${verbose+x} ] && [ ! -z ${unique+x} ]
-     then
-      echo "Removing duplicates" >> $(readlink /proc/$$/fd/2)
-     fi
      if [ ! -z ${unique+x} ]
      then
       SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
-      sort --unique --key=2 $INFILE > $OUTFILE
-      echo -n "Remove duplicates done: " >> $(readlink /proc/$$/fd/2)
-      show_time $(($(date +%s) - time_start))
+      sort --ignore-case --parallel="$threads" --unique --key=2 $INFILE > $OUTFILE
+      if [ ! -z ${verbose+x} ]
+      then
+       echo -n "Remove duplicates done: " >> $(readlink /proc/$$/fd/2)
+       show_time $(($(date +%s) - time_start))
+      fi
      fi
-     
+          
      # Sort by name
      if [ ! -z ${name_sort+x} ]
      then
@@ -908,9 +919,9 @@ arg=$1
       then
        echo "Sort in reverse order" >> $(readlink /proc/$$/fd/2)
       fi
-       sort --reverse --field-separator=$'\t' --key=1 $INFILE > $OUTFILE
+       sort --parallel="$threads" --reverse --field-separator=$'\t' --key=1 $INFILE > $OUTFILE
       else
-       sort --field-separator=$'\t' --key=1 $INFILE > $OUTFILE
+       sort --parallel="$threads" --field-separator=$'\t' --key=1 $INFILE > $OUTFILE
       fi
       if [ ! -z ${verbose+x} ]
       then
@@ -935,9 +946,9 @@ arg=$1
       then
        echo "Sort in reverse order" >> $(readlink /proc/$$/fd/2)
       fi
-       sort --numeric-sort --reverse
+       sort --parallel="$threads" --numeric-sort --reverse
       else
-       sort --numeric-sort
+       sort --parallel="$threads" --numeric-sort
       fi |
       cut --fields=2,3 > $OUTFILE
       if [ ! -z ${verbose+x} ]
@@ -946,6 +957,27 @@ arg=$1
        show_time $(($(date +%s) - time_start))
        echo "" >> $(readlink /proc/$$/fd/2)
       fi
+     fi
+     
+     # Separate sequences into files
+     if [ ! -z ${separate+x} ]
+     then
+     echo "Separating sequences into files..." >> $(readlink /proc/$$/fd/2)
+      if [ ! -d $separate ]
+      then
+       mkdir -p $separate
+      fi
+      for ((k=1;k<=$(cat $OUTFILE | wc -l);k++))
+      do
+       cut -f1 $OUTFILE | sed --quiet ''"$k"','"$k"'p;'"$(($k + 1))"'q' > $separate/$k.fasta
+       cut -f2 $OUTFILE | sed --quiet ''"$k"','"$k"'p;'"$(($k + 1))"'q' >> $separate/$k.fasta
+      done
+      if [ ! -z ${verbose+x} ]
+      then
+       echo -en "\nSequence separation done: " >> $(readlink /proc/$$/fd/2)
+       show_time $(($(date +%s) - time_start))
+      fi
+      exit 0
      fi
      
      # Convert tabbed to FASTA
