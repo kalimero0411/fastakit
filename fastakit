@@ -137,7 +137,7 @@ arg=$1
   shift 2
   ;;
   --version)
-  echo "fastakit version 22.03" >> $(readlink /proc/$$/fd/2)
+  echo "fastakit version 22.04" >> $(readlink /proc/$$/fd/2)
   exit 0
   ;;
   --check)
@@ -187,6 +187,31 @@ arg=$1
   ;;
   esac
   done
+  
+  # Check dependencies
+  if ! command -v gawk &> /dev/null
+  then
+   echo "gawk not installed" >> $(readlink /proc/$$/fd/2)
+   echo "Install using:" >> $(readlink /proc/$$/fd/2)
+   echo "sudo apt install gawk" >> $(readlink /proc/$$/fd/2)
+  exit 1
+  fi
+  
+  if ! command -v perl &> /dev/null
+  then
+   echo "perl not installed" >> $(readlink /proc/$$/fd/2)
+   echo "Install using:" >> $(readlink /proc/$$/fd/2)
+   echo "sudo apt install perl" >> $(readlink /proc/$$/fd/2)
+  exit 1
+  fi
+  
+  if ! command -v parallel &> /dev/null
+  then
+   echo "parallel not installed" >> $(readlink /proc/$$/fd/2)
+   echo "Install using:" >> $(readlink /proc/$$/fd/2)
+   echo "sudo apt install parallel" >> $(readlink /proc/$$/fd/2)
+  exit 1
+  fi
   
   # Time function
   function show_time () {
