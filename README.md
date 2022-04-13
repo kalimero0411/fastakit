@@ -10,14 +10,14 @@ fastakit [OPTIONS] [Sequence.fasta | standard input]
 	--unique	Remove duplicate sequences
 	--multi #	Convert to multi-line FASTA (nucleotide only)
 	--random	Create random sequences of respective length
-	--name_sort	Sort FASTA by name
-	--length_sort	Sort FASTA by sequence length (shortest to longest)
-	--reverse_sort	Sort in reverse order
+	-n | --name_sort	Sort FASTA by name
+	-l | --length_sort	Sort FASTA by sequence length (shortest to longest)
+	-r | --reverse_sort	Sort in reverse order
 	--upper	Sequences to uppercase
 	--lower	Sequences to lowercase
-	--orf	Sequence from first ATG in frame
+	-g | --orf	Sequence from first ATG in frame
 	--max_orf_num #	Maximum number of ORFs to output per sequence
-	--translate	Protein sequences in current frame
+	-p | --translate	Protein sequences in current frame
 	--table #	Translation code (Default = standard code)
 	--frame #	Frame to extract codons (Frames 1, 2 or 3; 0 = six frames; Default = 1)
 	--min_prot #	Minimum protein size (Assumes --translate)
