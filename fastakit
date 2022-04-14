@@ -668,7 +668,7 @@ arg=$1
       tee $ORFFILE3 |
       awk -F $'\t' '{if(match(tolower($0),"[tu]a[ag]|[tu]ga") > 0) print substr($0,1,match(tolower($0),"[tu]a[ag]|[tu]ga")+2);
       if(match(tolower($0),"[tu]a[ag]|[tu]ga") == 0) print $0}' |
-      if [ ! -z ${translate+x} ]
+      if [ ! -z ${translate+x} ] && [ -z ${min_max_seq_length+x} ]
       then
        translate |
        sed --regexp-extended 's/[actgu]//g' |
@@ -705,7 +705,7 @@ arg=$1
        tee $ORFFILE3 |
        awk -F $'\t' '{if(match(tolower($0),"[tu]a[ag]|[tu]ga") > 0) print substr($0,1,match(tolower($0),"[tu]a[ag]|[tu]ga")+2);
        if(match(tolower($0),"[tu]a[ag]|[tu]ga") == 0) print ""}' |
-       if [ ! -z ${translate+x} ]
+       if [ ! -z ${translate+x} ] && [ -z ${min_max_seq_length+x} ]
        then
         translate |
         sed --regexp-extended 's/[actgu]//g' |
@@ -841,7 +841,7 @@ arg=$1
     fi
     
     # Minimum/Maximum length (nucleotie)
-     if [ ! -z ${min_max_seq_length+x} ] && [ -z ${translate+x} ]
+     if [ ! -z ${min_max_seq_length+x} ]
      then
      if [ ${min_max_seq_length[0]} -gt 0 ] || [ ${min_max_seq_length[1]} -gt 0 ]
      then
@@ -858,7 +858,7 @@ arg=$1
      fi
     
     # Separate to codons and translate
-    if [ ! -z ${translate+x} ] && [ -z ${orf+x} ]
+    if [ ! -z ${translate+x} ] && ( [ -z ${orf+x} ] || [ ! -z ${min_max_seq_length+x} ] )
     then
      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
      if [ ! -z ${verbose+x} ]
