@@ -34,6 +34,8 @@ fastakit [OPTIONS] [Sequence.fasta | standard input]
 	--rna_dna	Convert RNA to DNA / DNA to RNA (Default = no conversion)
 	--min_max_seq #,#	Minimum/Maximum sequence size (e.g. 10,50 ; 0 to ignore)
 	--check	Check if FASTA file is single line
+	--fullprot	Return only ORFs/proteins with start and stop codons
+	--ignorestart	Ignore start codon when getting ORFs
 	-t | --threads #	Number of CPU threads to use (Default = Detected processors or 1)
 	-v | --verbose	Verbose
 	-h | --help	Display help
@@ -166,6 +168,14 @@ arg=$1
   multi=1 # Covert to multiline FASTA
   multi_length=$2
   shift 2
+  ;;
+  --fullprot)
+  fullprot=1
+  shift
+  ;;
+  --ignorestart)
+  ignorestart=1
+  shift
   ;;
   -v | --verbose)
   verbose=1 # Print file names and arguments
@@ -663,11 +673,22 @@ arg=$1
       # Separate codons and cut to first start and stop codon
       local orf_num=1
       awk -F '' '{for(i=1; i<=NF; i+=3) {printf "%s%s ", $i,$(i+1)$(i+2);}; print ""}' $ORFFILE1 |
-      awk -F $'\t' '{if(match(tolower($0),"a[tu]g") > 0) print substr($0,match(tolower($0),"a[tu]g"));
-      if(match(tolower($0),"a[tu]g") == 0) print ""}' |
+      if [ -z ${ignorestart+x} ]
+       then
+        awk -F $'\t' '{if(match(tolower($0),"a[tu]g") > 0) print substr($0,match(tolower($0),"a[tu]g"));
+       if(match(tolower($0),"a[tu]g") == 0) print ""}'
+       else
+        cat -
+       fi |
       tee $ORFFILE3 |
-      awk -F $'\t' '{if(match(tolower($0),"[tu]a[ag]|[tu]ga") > 0) print substr($0,1,match(tolower($0),"[tu]a[ag]|[tu]ga")+2);
-      if(match(tolower($0),"[tu]a[ag]|[tu]ga") == 0) print $0}' |
+      if [ ! -z ${fullprot+x} ]
+      then
+       awk -F $'\t' '{if(match(tolower($0),"[tu]a[ag]|[tu]ga") > 0) print substr($0,1,match(tolower($0),"[tu]a[ag]|[tu]ga")+2);
+      if(match(tolower($0),"[tu]a[ag]|[tu]ga") == 0) print ""}'
+      else
+       awk -F $'\t' '{if(match(tolower($0),"[tu]a[ag]|[tu]ga") > 0) print substr($0,1,match(tolower($0),"[tu]a[ag]|[tu]ga")+2);
+      if(match(tolower($0),"[tu]a[ag]|[tu]ga") == 0) print $0}'
+      fi |
       if [ ! -z ${translate+x} ] && [ -z ${min_max_seq_length+x} ]
       then
        translate |
@@ -700,11 +721,22 @@ arg=$1
        # Cut until first start and stop codon or until end of line
        awk -F $'\t' '{if(match(tolower($0),"[tu]a[ag]|[tu]ga") > 0) print substr($0,match(tolower($0),"[tu]a[ag]|[tu]ga")+4);
        if(match(tolower($0),"[tu]a[ag]|[tu]ga") == 0) print ""}' $ORFFILE1 |
-       awk -F $'\t' '{if(match(tolower($0),"a[tu]g") > 0) print substr($0,match(tolower($0),"a[tu]g"));
-       if(match(tolower($0),"a[tu]g") == 0) print ""}' |
+       if [ -z ${ignorestart+x} ]
+       then
+        awk -F $'\t' '{if(match(tolower($0),"a[tu]g") > 0) print substr($0,match(tolower($0),"a[tu]g"));
+       if(match(tolower($0),"a[tu]g") == 0) print ""}'
+       else
+        cat -
+       fi |
        tee $ORFFILE3 |
+       if [ ! -z ${fullprot+x} ]
+      then
        awk -F $'\t' '{if(match(tolower($0),"[tu]a[ag]|[tu]ga") > 0) print substr($0,1,match(tolower($0),"[tu]a[ag]|[tu]ga")+2);
-       if(match(tolower($0),"[tu]a[ag]|[tu]ga") == 0) print ""}' |
+      if(match(tolower($0),"[tu]a[ag]|[tu]ga") == 0) print ""}'
+      else
+       awk -F $'\t' '{if(match(tolower($0),"[tu]a[ag]|[tu]ga") > 0) print substr($0,1,match(tolower($0),"[tu]a[ag]|[tu]ga")+2);
+      if(match(tolower($0),"[tu]a[ag]|[tu]ga") == 0) print $0}'
+      fi |
        if [ ! -z ${translate+x} ] && [ -z ${min_max_seq_length+x} ]
        then
         translate |
