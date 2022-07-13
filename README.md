@@ -2,7 +2,7 @@
 A bash script for FASTA sequence formatting and modification.
 
 ```
-fastakit [OPTIONS] [Sequence.fasta | standard input]
+fastakit [OPTIONS] [Sequence.fasta | stdin]
 	-o | --out	Output to file (otherwise to stdout)
 	-i | --in-place	Modify file in-place
 	-c | --complement	Complementary sequence
