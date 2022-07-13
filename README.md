@@ -22,12 +22,15 @@ fastakit [OPTIONS] [Sequence.fasta | standard input]
 	--frame #	Frame to extract codons (Frames 1, 2 or 3; 0 = six frames; Default = 1)
 	--min_prot #	Minimum protein size (Assumes --translate)
 	--gc	Get percent GC per sequence (Disables --translate)
+	--separate DIR  Separate sequnces into files in directory DIR
+	--nonnuc        Non-ACTGU characters (0 ignored)
 	--rna_dna	Convert RNA to DNA / DNA to RNA (Default = no conversion)
 	--min_max_seq #,#	Minimum/Maximum sequence size (e.g. 10,50 ; 0 to ignore)
+	--maxprot Return the # of largest proteins for each ORF (Assumes --translate and --orf)
 	--check	Check if FASTA file is single line
 	--fullprot	Return only ORFs/proteins with start and stop codons
 	--ignorestart	Ignore start codon when getting ORFs
-	-t | --threads #	Number of CPU threads to use (Default = 1)
+	-t | --threads #	Number of CPU threads to use (Default = Detected processors or 1)
 	-v | --verbose	Verbose
 	-h | --help	Display help
 
