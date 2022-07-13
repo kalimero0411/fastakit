@@ -33,6 +33,7 @@ fastakit [OPTIONS] [Sequence.fasta | standard input]
 	--nonnuc	Non-ACTGU characters (0 ignored)
 	--rna_dna	Convert RNA to DNA / DNA to RNA (Default = no conversion)
 	--min_max_seq #,#	Minimum/Maximum sequence size (e.g. 10,50 ; 0 to ignore)
+	--maxprot Return the # of largest proteins for each ORF (Assumes --translate and --orf)
 	--check	Check if FASTA file is single line
 	--fullprot	Return only ORFs/proteins with start and stop codons
 	--ignorestart	Ignore start codon when getting ORFs
@@ -136,6 +137,12 @@ arg=$1
   ;;
   --table)
   translate_table=$2 # Alternative translation table
+  shift 2
+  ;;
+  --maxprot)
+  translate=1
+  orf=1
+  maxprot=$2 # Return # of largest proteins
   shift 2
   ;;
   --version)
@@ -855,7 +862,12 @@ arg=$1
       rm --force $INFILE_revcomp $HEADERS_frame $HEADERS_frame_rev
      fi
      
-     rm --force $HEADERS
+     if [ ! -z ${maxprot+x} ]
+     then
+      HEADERS_ORIG=$HEADERS
+     else
+      rm --force $HEADERS
+     fi
      HEADERS=$HEADERS_TMP
 
      if [ ! -z ${verbose+x} ] && [ -z ${translate+x} ]
@@ -949,7 +961,22 @@ arg=$1
      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
      paste $HEADERS $INFILE |
      grep --perl-regexp --invert-match "\t$" > $OUTFILE
-
+     
+     # Get maxprot number of largest proteins from orfs
+     if [ ! -z ${maxprot+x} ]
+     then
+      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
+      : > $OUTFILE
+      for ((header_max=1;header_max<=$(cat $HEADERS_ORIG | wc -l);header_max++))
+      do
+       grep -f <(head -n $header_max $HEADERS_ORIG | tail -1) $INFILE |
+       awk -F '\t' '{OFS="\t"; print length($2),$0}' |
+       sort --parallel="$threads" --numeric-sort --reverse |
+       head -n $maxprot |
+       cut --fields=2,3 >> $OUTFILE
+      done
+      rm --force $HEADERS_ORIG
+     fi
      
      if [ ! -z ${unique+x} ]
      then
