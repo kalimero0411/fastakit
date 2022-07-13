@@ -965,6 +965,7 @@ arg=$1
      # Get maxprot number of largest proteins from orfs
      if [ ! -z ${maxprot+x} ]
      then
+      if [ ! -z ${verbose+x} ]; then echo "Extracting "$maxprot" longest proteins for each ORF" >> $(readlink /proc/$$/fd/2); fi
       SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
       : > $OUTFILE
       for ((header_max=1;header_max<=$(cat $HEADERS_ORIG | wc -l);header_max++))
