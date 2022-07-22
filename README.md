@@ -22,6 +22,7 @@ fastakit [OPTIONS] [Sequence.fasta | stdin]
 	--frame #	Frame to extract codons (Frames 1, 2 or 3; 0 = six frames; Default = 1)
 	--min_prot #	Minimum protein size (Assumes --translate)
 	--gc	Get percent GC per sequence (Disables --translate)
+	--mw	Calculate the moleculare eight of DNA/RNA/protein per sequence (ss tab ds)
 	--separate DIR  Separate sequnces into files in directory DIR
 	--nonnuc        Non-ACTGU characters (0 ignored)
 	--rna_dna	Convert RNA to DNA / DNA to RNA (Default = no conversion)
@@ -43,10 +44,12 @@ fastakit [OPTIONS] [Sequence.fasta | stdin]
 	
 ```
 
-- If `--orf` option is selected, each sequence will be divided into individual ORFs from a start to a stop codon in the current frame, or until the end of the sequence.
+- The `--orf` option divides each sequence into individual ORFs from a start to a stop codon in the current frame, or until the end of the sequence.
+- The `--frame` option can take multiple inputs of numbers 1-6 seperated by a comma, or number 0 which is equivilant to 1,2,3,4,5,6.
 - The `--translate` option applies to each ORF only if `--orf` is selected, otherwise it applies to the entire sequence in the current frame, regardless of start/stop codons.
 - The `--length_sort` option applies after ORFs are retrieved and/or sequences are translated.
 - If you want the reverse complement, use `--complement` and `--reverse_seq`.
 - The `--min_max_seq` option applies to the nucleic acid sequences.
 - The `--min_max_seq` option together with `--translate` applies the `--min_prot` option for the respective minimum protein size (i.e. (minimum / 3) - 1).
 - The `--check` option return exit code 0 if the FASTA file is single-line.
+- The `--mw` option calculates average protein molucular weight only if the sequences were translated, detects DNA/RNA sequences, and ouputs the ssDNA/sRNA and dsDNA/dsRNA average molecular weight seperated by a tab.

@@ -26,9 +26,10 @@ fastakit [OPTIONS] [Sequence.fasta | stdin]
 	--max_orf_num #	Maximum number of ORFs to output per sequence
 	-p | --translate	Protein sequences in current frame
 	--table #	Translation code (Default = standard code)
-	--frame #	Frame to extract codons (Frames 1, 2 or 3; 0 = six frames; Default = 1)
+	--frame #	Frame to extract codons (Any of frames 1,2,3,4,5,6; 0 = six frames; Default = 1)
 	--min_prot #	Minimum protein size (Assumes --translate)
-	--gc	Get percent GC per sequence (Disables --translate)
+	--gc	Calculate percent GC per sequence (Disables --translate)
+	--mw	Calculate the moleculare eight of DNA/RNA/protein per sequence (ss tab ds)
 	--separate DIR	Separate sequnces into files in directory DIR
 	--nonnuc	Non-ACTGU characters (0 ignored)
 	--rna_dna	Convert RNA to DNA / DNA to RNA (Default = no conversion)
@@ -104,7 +105,7 @@ arg=$1
   shift
   ;;
   --frame) # Set frame for codons
-  frame=$2
+  frame=($(sed 's/,/ /g' <(echo $2)))
   shift 2
   ;;
   -g | --orf)
@@ -182,6 +183,10 @@ arg=$1
   ;;
   --ignorestart)
   ignorestart=1
+  shift
+  ;;
+  --mw)
+  MW=1
   shift
   ;;
   -v | --verbose)
@@ -334,18 +339,96 @@ arg=$1
      done
 }
   
+  # Residue weights
+  function calc_MW(){
+	strand=$1
+	while read seq
+	do
+	echo $seq |
+	if [ ! -z ${translate+x} ]
+	then
+	 tr -d "*" |
+#	 awk '{print toupper($0)}' | 
+	 sed --regexp-extended \
+         's/M/131.1926 /g;
+          s/I/113.1594 /g;
+          s/T/101.1051 /g;
+          s/N/114.1038 /g;
+          s/K/128.1741 /g;
+          s/S/87.0782 /g;
+          s/F/147.1766 /g;
+          s/L/113.1594 /g;
+          s/Y/163.176 /g;
+          s/C/103.1388 /g;
+          s/W/186.2132 /g;
+          s/P/97.1167 /g;
+          s/H/137.1411 /g;
+          s/Q/128.1307 /g;
+          s/R/156.1875 /g;
+          s/V/99.1326 /g;
+          s/A/71.0788 /g;
+          s/D/115.0886 /g;
+          s/E/129.1155 /g;
+          s/G/57.0519 /g;
+          s/ $//g' |
+           awk -F ' ' '{for(i=1;i<=NF;i++) t+=$i; print t+18.01528; t=0}'
+         elif [[ $MOLECULE == "DNA" ]]
+         then
+         awk '{print tolower($0)}' |
+         if [ $strand -eq 1 ]
+         then
+          sed --regexp-extended \
+          's/a/313.20672 /g;
+           s/t/304.19322 /g;
+           s/c/289.18182 /g;
+           s/g/329.20592 /g;
+           s/ $//g;' |
+           awk -F ' ' '{for(i=1;i<=NF;i++) t+=$i; print t+18.01528; t=0}'
+         else
+          sed --regexp-extended \
+          's/[at]/313.20672 304.19322 /g;
+           s/[cg]/289.18182 329.20592 /g;
+           s/ $//g;' |
+           awk -F ' ' '{for(i=1;i<=NF;i++) t+=$i; print t+(2*18.01528); t=0}'
+         fi
+         else
+         awk '{print tolower($0)}' |
+         if [ $strand -eq 1 ]
+         then
+          sed --regexp-extended \
+          's/a/313.20672 /g;
+           s/u/306.16602 /g;
+           s/c/289.18182 /g;
+           s/g/329.20592 /g;
+           s/ $//g;' |
+           awk -F ' ' '{for(i=1;i<=NF;i++) t+=$i; print t+18.01528; t=0}'
+          else
+           sed --regexp-extended \
+          's/[au]/313.20672 306.16602 /g;
+           s/[cg]/289.18182 329.20592 /g;
+           s/ $//g;' |
+           awk -F ' ' '{for(i=1;i<=NF;i++) t+=$i; print t+18.01528; t=0}'
+          fi
+          fi
+         done
+     }
+      
   # Frame exception
-  if [ $frame -lt 0 ] || [ $frame -gt 3 ]
+  if ! ([[ "${frame[@]}" =~ 0 ]] || [[ "${frame[@]}" =~ 1 ]] || [[ "${frame[@]}" =~ 2 ]] || [[ "${frame[@]}" =~ 3 ]] || [[ "${frame[@]}" =~ 4 ]] || [[ "${frame[@]}" =~ 5 ]] || [[ "${frame[@]}" =~ 6 ]])
   then
-   echo "Frame value must be 0, 1, 2 or 3"
+   echo "Frame value must be 0-6 (comma delimited)"
    print_usage
    exit 1
-  fi
-  
-  if [ $frame -eq 0 ]
-  then
-   unset $complement
-   unset $rev_seq
+  else
+   if [ $frame -eq 0 ]
+   then
+    frame=(1 2 3 4 5 6)
+   fi
+   if [[ "${frame[@]}" =~ 4 ]] || [[ "${frame[@]}" =~ 5 ]] || [[ "${frame[@]}" =~ 6 ]]
+   then
+    unset $complement
+    unset $rev_seq
+   fi
   fi
   
   # Disable translate
@@ -528,7 +611,7 @@ arg=$1
      exit 0
     fi
     
-    if [ ! -z ${complement+x} ] || [ ! -z ${rna_dna+x} ] || [ ! -z ${random+x} ]
+    if [ ! -z ${complement+x} ] || [ ! -z ${rna_dna+x} ] || [ ! -z ${random+x} ] || ([ ! -z ${MW+x} ] && [ -z ${translate+x} ])
     then
      MOL=$(mktemp)
      export OUTFILE
@@ -629,21 +712,70 @@ arg=$1
       fi
      fi
      
-     # Change frame
-     if ([ $frame -gt 1 ] && [ ! -z ${translate+x} ]) || ([ $frame -gt 1 ] && [ ! -z ${orf+x} ])
+     # Retain originl headers
+     if [ ! -z ${maxprot+x} ]
      then
-      sed --in-place --regexp-extended 's/^.{'"$(($frame - 1))"'}//g' $OUTFILE
+      HEADERS_ORIG=$(mktemp)
+      cp --force $HEADERS $HEADERS_ORIG
+     fi
+     
+     # Change frame
+     if [ "${#frame[@]}" -ne 1 ] || [ ${frame[0]} -ne 1 ]
+     then
+     SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
+     ADD_frame=$(mktemp)
+     ADD_headers=$(mktemp)
+     if [[ "${frame[@]}" =~ 1 ]]
+     then
+      cat $INFILE >> $ADD_frame
+      awk -F $'\t' '{print $0"_frame1"}' $HEADERS >> $ADD_headers
+     fi
+     if [[ "${frame[@]}" =~ 2 ]]
+     then
+      sed --regexp-extended 's/^.//g' $INFILE >> $ADD_frame
+      awk -F $'\t' '{print $0"_frame2"}' $HEADERS >> $ADD_headers
+     fi
+     if [[ "${frame[@]}" =~ 3 ]]
+     then
+      sed --regexp-extended 's/^..//g' $INFILE >> $ADD_frame
+      awk -F $'\t' '{print $0"_frame3"}' $HEADERS >> $ADD_headers
+     fi
+     if [[ "${frame[@]}" =~ 4 ]] || [[ "${frame[@]}" =~ 5 ]] || [[ "${frame[@]}" =~ 6 ]]
+     then
+      INFILE_revcomp=$(mktemp)
+      parallel -a $INFILE -k -j"$threads" --block 30M --pipepart 'rev' |
+      parallel -k -j"$threads" --block 30M --pipe 'tr \"ATCGUatcgu\" \"TAGCAtagca\"' \
+      > $INFILE_revcomp
+      if [[ "${frame[@]}" =~ 4 ]]
+      then
+       cat $INFILE_revcomp >> $ADD_frame
+       awk -F $'\t' '{print $0"_frame4"}' $HEADERS >> $ADD_headers
+      fi
+      if [[ "${frame[@]}" =~ 5 ]]
+      then
+       sed --regexp-extended 's/^.//g' $INFILE_revcomp >> $ADD_frame
+       awk -F $'\t' '{print $0"_frame5"}' $HEADERS >> $ADD_headers
+      fi
+      if [[ "${frame[@]}" =~ 6 ]]
+      then
+       sed --regexp-extended 's/^..//g' $INFILE_revcomp >> $ADD_frame
+       awk -F $'\t' '{print $0"_frame6"}' $HEADERS >> $ADD_headers
+      fi
+     fi
+     rm --force $OUTFILE $INFILE_revcomp $HEADERS
+     HEADERS=$ADD_headers
+     OUTFILE=$ADD_frame
      fi
 
      if [ ! -z ${orf+x} ]
      then
      if [ ! -z ${verbose+x} ] && [ ! -z ${orf+x} ]
      then
-      echo "ORF | frame "$frame >> $(readlink /proc/$$/fd/2)
+      echo "ORF | frame(s) "${frame[@]} >> $(readlink /proc/$$/fd/2)
      fi
      if [ ! -z ${verbose+x} ] && [ ! -z ${translate+x} ]
      then
-      echo "Translate | frame "$frame >> $(readlink /proc/$$/fd/2)
+      echo "Translate | frame(s) "${frame[@]} >> $(readlink /proc/$$/fd/2)
      fi
      if [ ! -z ${verbose+x} ] && [ $translate_table -ne 1 ]
      then
@@ -809,9 +941,7 @@ arg=$1
      HEADERS_TMP=$(mktemp)
      : > $OUTFILE
      : > $HEADERS_TMP
-     
-     if [ $frame -ne 0 ]
-     then
+
       for ((core=0;core <= $(($threads - 1));core++))
       do
        get_orfs ${start[$core]} ${end[$core]} $core $INFILE $HEADERS &
@@ -821,53 +951,8 @@ arg=$1
       do
        wait $pid
       done
-     else
-      INFILE_revcomp=$(mktemp)
-      HEADERS_frame=$(mktemp)
-      HEADERS_frame_rev=$(mktemp)
-      parallel -a $INFILE -k -j"$threads" --block 30M --pipepart 'rev' |
-      parallel -k -j"$threads" --block 30M --pipe 'tr \"ATCGUatcgu\" \"TAGCAtagca\"' \
-      > $INFILE_revcomp
-      for ((frame_set=1;$frame_set<=3;frame_set++))
-      do
-      if [ $frame_set -gt 1 ]
-      then
-       sed --in-place --regexp-extended 's/^.//g' $INFILE
-       sed --in-place --regexp-extended 's/^.//g' $INFILE_revcomp
-      fi
-       sed --regexp-extended 's/(.+)/\1_frame'"$(($frame_set))"'/g' $HEADERS > $HEADERS_frame
-       sed --regexp-extended 's/(.+)/\1_frame_'"$(($frame_set*2))"'_rev/g' $HEADERS > $HEADERS_frame_rev
-      for ((core=0;core <= $(($threads - 1));core++))
-      do
-       get_orfs ${start[$core]} ${end[$core]} $core $INFILE $HEADERS_frame &
-       pids[$core]=$!
-      done
-      for pid in ${pids[*]}
-      do
-       wait $pid
-      done
-      for ((core=0;core <= $(($threads - 1));core++))
-      do
-       get_orfs ${start[$core]} ${end[$core]} $core $INFILE_revcomp $HEADERS_frame_rev &
-       pids[$core]=$!
-      done
      
-      for pid in ${pids[*]}
-      do
-       wait $pid
-      done
-      done
-      
-      # Cleanup
-      rm --force $INFILE_revcomp $HEADERS_frame $HEADERS_frame_rev
-     fi
-     
-     if [ ! -z ${maxprot+x} ]
-     then
-      HEADERS_ORIG=$HEADERS
-     else
-      rm --force $HEADERS
-     fi
+     rm --force $HEADERS
      HEADERS=$HEADERS_TMP
 
      if [ ! -z ${verbose+x} ] && [ -z ${translate+x} ]
@@ -938,25 +1023,6 @@ arg=$1
        fi
     fi
     
-     # GC content
-     if [ ! -z ${verbose+x} ] && [ ! -z ${percent_GC+x} ]
-     then
-      echo "Percent GC" >> $(readlink /proc/$$/fd/2)
-     fi
-     
-     if [ ! -z ${percent_GC+x} ]
-     then
-     SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
-      paste <(cat $HEADERS | tr -d ">") <(awk '{var=length($0);gsub("[AaTt]","",$0);print length($0)/var*100}' $INFILE)
-      if [ ! -z ${verbose+x} ]
-      then
-       echo -n "GC fraction done: " >> $(readlink /proc/$$/fd/2)
-       show_time $(($(date +%s) - time_start))
-       echo "" >> $(readlink /proc/$$/fd/2)
-      fi
-      exit 0
-     fi
-     
      # Combine headers and sequences
      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
      paste $HEADERS $INFILE |
@@ -965,7 +1031,7 @@ arg=$1
      # Get maxprot number of largest proteins from orfs
      if [ ! -z ${maxprot+x} ]
      then
-      if [ ! -z ${verbose+x} ]; then echo "Extracting "$maxprot" longest proteins for each ORF" >> $(readlink /proc/$$/fd/2); fi
+      if [ ! -z ${verbose+x} ]; then echo "Extracting "$maxprot" longest proteins for each sequence" >> $(readlink /proc/$$/fd/2); fi
       SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
       : > $OUTFILE
       for ((header_max=1;header_max<=$(cat $HEADERS_ORIG | wc -l);header_max++))
@@ -1044,6 +1110,42 @@ arg=$1
       fi
      fi
      
+     # GC content
+     if [ ! -z ${percent_GC+x} ]
+     then
+     if [ ! -z ${verbose+x} ]
+     then
+      echo "Percent GC" >> $(readlink /proc/$$/fd/2)
+     fi
+     SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
+      paste <(cut --fields=1 $INFILE | tr -d ">") <(cut --fields=2 $INFILE | awk '{var=length($0);gsub("[AaTt]","",$0);print length($0)/var*100}')
+      if [ ! -z ${verbose+x} ]
+      then
+       echo -n "GC fraction done: " >> $(readlink /proc/$$/fd/2)
+       show_time $(($(date +%s) - time_start))
+       echo "" >> $(readlink /proc/$$/fd/2)
+      fi
+      exit 0
+     fi
+     
+     # Calculate molucular weight
+    if [ ! -z ${MW+x} ]
+    then
+    if [ ! -z ${verbose+x} ]
+     then
+      echo "Calculating molecular weight" >> $(readlink /proc/$$/fd/2)
+     fi
+     SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
+     paste <(cut --fields=1 $INFILE | tr -d ">") <(cut --fields=2 $INFILE | calc_MW 1) <(cut --fields=2 $INFILE | calc_MW 2)
+     if [ ! -z ${verbose+x} ]
+      then
+       echo -n "Molecular weight done: " >> $(readlink /proc/$$/fd/2)
+       show_time $(($(date +%s) - time_start))
+       echo "" >> $(readlink /proc/$$/fd/2)
+      fi
+      exit 0
+    fi
+    
      # Separate sequences into files
      if [ ! -z ${separate+x} ]
      then
@@ -1054,8 +1156,8 @@ arg=$1
       fi
       for ((k=1;k<=$(cat $OUTFILE | wc -l);k++))
       do
-       cut -f1 $OUTFILE | sed --quiet ''"$k"','"$k"'p;'"$(($k + 1))"'q' > $separate/$k.fasta
-       cut -f2 $OUTFILE | sed --quiet ''"$k"','"$k"'p;'"$(($k + 1))"'q' >> $separate/$k.fasta
+       cut --fields=1 $OUTFILE | sed --quiet ''"$k"','"$k"'p;'"$(($k + 1))"'q' > $separate/$k.fasta
+       cut --fields=2 $OUTFILE | sed --quiet ''"$k"','"$k"'p;'"$(($k + 1))"'q' >> $separate/$k.fasta
       done
       if [ ! -z ${verbose+x} ]
       then
