@@ -22,12 +22,12 @@ fastakit [OPTIONS] [Sequence.fasta | stdin]
 	--frame #	Frame to extract codons (Frames 1, 2 or 3; 0 = six frames; Default = 1)
 	--min_prot #	Minimum protein size (Assumes --translate)
 	--gc	Get percent GC per sequence (Disables --translate)
-	--mw	Calculate the moleculare eight of DNA/RNA/protein per sequence (ss tab ds)
+	--mw	Calculate the moleculare weight of DNA/RNA/protein per sequence (ss ds)
 	--separate DIR  Separate sequnces into files in directory DIR
 	--nonnuc        Non-ACTGU characters (0 ignored)
 	--rna_dna	Convert RNA to DNA / DNA to RNA (Default = no conversion)
 	--min_max_seq #,#	Minimum/Maximum sequence size (e.g. 10,50 ; 0 to ignore)
-	--maxprot Return the # of largest proteins for each ORF (Assumes --translate and --orf)
+	--maxseq Return the # of largest sequences for each input sequence (ORFs, proteins, etc.)
 	--check	Check if FASTA file is single line
 	--fullprot	Return only ORFs/proteins with start and stop codons
 	--ignorestart	Ignore start codon when getting ORFs
@@ -52,4 +52,4 @@ fastakit [OPTIONS] [Sequence.fasta | stdin]
 - The `--min_max_seq` option applies to the nucleic acid sequences.
 - The `--min_max_seq` option together with `--translate` applies the `--min_prot` option for the respective minimum protein size (i.e. (minimum / 3) - 1).
 - The `--check` option return exit code 0 if the FASTA file is single-line.
-- The `--mw` option calculates average protein molucular weight only if the sequences were translated, detects DNA/RNA sequences, and ouputs the ssDNA/sRNA and dsDNA/dsRNA average molecular weight seperated by a tab.
+- The `--mw` option detects DNA/RNA/protein sequences, and ouputs the average molecular weight of ssDNA/sRNA and dsDNA/dsRNA seperated by a tab or protein average molecular weight.

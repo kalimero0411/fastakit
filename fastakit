@@ -29,12 +29,12 @@ fastakit [OPTIONS] [Sequence.fasta | stdin]
 	--frame #	Frame to extract codons (Any of frames 1,2,3,4,5,6; 0 = six frames; Default = 1)
 	--min_prot #	Minimum protein size (Assumes --translate)
 	--gc	Calculate percent GC per sequence (Disables --translate)
-	--mw	Calculate the moleculare eight of DNA/RNA/protein per sequence (ss tab ds)
+	--mw	Calculate the moleculare weight of DNA/RNA/protein per sequence (ss ds)
 	--separate DIR	Separate sequnces into files in directory DIR
 	--nonnuc	Non-ACTGU characters (0 ignored)
 	--rna_dna	Convert RNA to DNA / DNA to RNA (Default = no conversion)
 	--min_max_seq #,#	Minimum/Maximum sequence size (e.g. 10,50 ; 0 to ignore)
-	--maxprot Return the # of largest proteins for each ORF (Assumes --translate and --orf)
+	--maxseq Return the # of largest sequences for each input sequence (ORFs, proteins, etc.)
 	--check	Check if FASTA file is single line
 	--fullprot	Return only ORFs/proteins with start and stop codons
 	--ignorestart	Ignore start codon when getting ORFs
@@ -140,10 +140,8 @@ arg=$1
   translate_table=$2 # Alternative translation table
   shift 2
   ;;
-  --maxprot)
-  translate=1
-  orf=1
-  maxprot=$2 # Return # of largest proteins
+  --maxseq)
+  maxseq=$2 # Return # of largest proteins
   shift 2
   ;;
   --version)
@@ -345,7 +343,7 @@ arg=$1
 	while read seq
 	do
 	echo $seq |
-	if [ ! -z ${translate+x} ]
+	if [[ $MOLECULE == "PROTEIN" ]]
 	then
 	 tr -d "*" |
 #	 awk '{print toupper($0)}' | 
@@ -384,14 +382,15 @@ arg=$1
            s/g/329.20592 /g;
            s/ $//g;' |
            awk -F ' ' '{for(i=1;i<=NF;i++) t+=$i; print t+18.01528; t=0}'
-         else
+         else 
           sed --regexp-extended \
           's/[at]/313.20672 304.19322 /g;
            s/[cg]/289.18182 329.20592 /g;
            s/ $//g;' |
            awk -F ' ' '{for(i=1;i<=NF;i++) t+=$i; print t+(2*18.01528); t=0}'
          fi
-         else
+         elif [[ $MOLECULE == "RNA" ]]
+         then
          awk '{print tolower($0)}' |
          if [ $strand -eq 1 ]
          then
@@ -409,27 +408,36 @@ arg=$1
            s/ $//g;' |
            awk -F ' ' '{for(i=1;i<=NF;i++) t+=$i; print t+18.01528; t=0}'
           fi
+          else
+           echo "Error detecting molecule"
+           exit 1
           fi
          done
      }
       
   # Frame exception
-  if ! ([[ "${frame[@]}" =~ 0 ]] || [[ "${frame[@]}" =~ 1 ]] || [[ "${frame[@]}" =~ 2 ]] || [[ "${frame[@]}" =~ 3 ]] || [[ "${frame[@]}" =~ 4 ]] || [[ "${frame[@]}" =~ 5 ]] || [[ "${frame[@]}" =~ 6 ]])
+  for frame_test in ${frame[@]}
+  do
+   if [ $frame_test -lt 0 ] || [ $frame_test -gt 6 ]
   then
    echo "Frame value must be 0-6 (comma delimited)"
    print_usage
    exit 1
-  else
-   if [ $frame -eq 0 ]
+  fi
+  done
+
+  # Set six-frame array variable
+  if [ $frame -eq 0 ]
    then
     frame=(1 2 3 4 5 6)
    fi
-   if [[ "${frame[@]}" =~ 4 ]] || [[ "${frame[@]}" =~ 5 ]] || [[ "${frame[@]}" =~ 6 ]]
+
+  # Disable rev-comp for reverse frames
+  if [[ "${frame[@]}" =~ 4 ]] || [[ "${frame[@]}" =~ 5 ]] || [[ "${frame[@]}" =~ 6 ]]
    then
     unset $complement
     unset $rev_seq
    fi
-  fi
   
   # Disable translate
   if [ ! -z ${percent_GC+x} ]
@@ -611,15 +619,20 @@ arg=$1
      exit 0
     fi
     
-    if [ ! -z ${complement+x} ] || [ ! -z ${rna_dna+x} ] || [ ! -z ${random+x} ] || ([ ! -z ${MW+x} ] && [ -z ${translate+x} ])
+    if [ ! -z ${complement+x} ] || [ ! -z ${rna_dna+x} ] || [ ! -z ${random+x} ] || [ ! -z ${MW+x} ]
     then
-     MOL=$(mktemp)
-     export OUTFILE
-     export MOL
-     parallel -j2 --halt now,success=1 ::: \
-     'grep --ignore-case --max-count=1 "T" $OUTFILE > /dev/null && echo "DNA" > $MOL' \
-     'grep --ignore-case --max-count=1 "U" $OUTFILE > /dev/null && echo "RNA" > $MOL' &> /dev/null
-     MOLECULE=$(cat $MOL)
+     if $(head -5 $OUTFILE | awk '{seq=length($0); gsub("[actguACTGU]","",$0)}; length($0)/seq > 0.25{exit 1}')
+     then
+      MOL=$(mktemp)
+      export OUTFILE
+      export MOL
+      parallel -j2 --halt now,success=1 ::: \
+      'grep --ignore-case --max-count=1 "T" $OUTFILE > /dev/null && echo "DNA" > $MOL' \
+      'grep --ignore-case --max-count=1 "U" $OUTFILE > /dev/null && echo "RNA" > $MOL' &> /dev/null
+      MOLECULE=$(cat $MOL)
+     else
+      MOLECULE="PROTEIN"
+     fi
     fi
      
      if [ ! -z ${random+x} ]
@@ -629,7 +642,8 @@ arg=$1
       then
        awk -F $'\t' '{print system("tr -dc atcg < /dev/urandom | head -c "length($0))}' $INFILE |
       tr -d 0 > $OUTFILE
-      else
+      elif [[ $MOLECULE = "RNA" ]]
+      then
        awk -F $'\t' '{print system("tr -dc aucg < /dev/urandom | head -c "length($0))}' $INFILE |
       tr -d 0 > $OUTFILE
       fi
@@ -713,7 +727,7 @@ arg=$1
      fi
      
      # Retain originl headers
-     if [ ! -z ${maxprot+x} ]
+     if [ ! -z ${maxseq+x} ]
      then
       HEADERS_ORIG=$(mktemp)
       cp --force $HEADERS $HEADERS_ORIG
@@ -1028,18 +1042,18 @@ arg=$1
      paste $HEADERS $INFILE |
      grep --perl-regexp --invert-match "\t$" > $OUTFILE
      
-     # Get maxprot number of largest proteins from orfs
-     if [ ! -z ${maxprot+x} ]
+     # Get maxseq number of largest sequences from each input sequence
+     if [ ! -z ${maxseq+x} ]
      then
-      if [ ! -z ${verbose+x} ]; then echo "Extracting "$maxprot" longest proteins for each sequence" >> $(readlink /proc/$$/fd/2); fi
+      if [ ! -z ${verbose+x} ]; then echo "Extracting "$maxseq" longest sequence(s) for each input sequence" >> $(readlink /proc/$$/fd/2); fi
       SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
       : > $OUTFILE
       for ((header_max=1;header_max<=$(cat $HEADERS_ORIG | wc -l);header_max++))
       do
-       grep -f <(head -n $header_max $HEADERS_ORIG | tail -1) $INFILE |
-       awk -F '\t' '{OFS="\t"; print length($2),$0}' |
+       header_find=$(head --lines=$header_max $HEADERS_ORIG | tail -1)
+       awk -F $'\t' -v header_find="$header_find" '{OFS="\t"}; {hfind=header_find"\t"}; {headers=$1}; {seq=$2}; {gsub(/_orf[0-9]+/,"",$1)}; {gsub(/_frame[0-9]+/,"",$1)}; {gsub("*","",$2)}; $0~hfind{print length($2),headers,seq}' $INFILE |
        sort --parallel="$threads" --numeric-sort --reverse |
-       head -n $maxprot |
+       head -n $maxseq |
        cut --fields=2,3 >> $OUTFILE
       done
       rm --force $HEADERS_ORIG
@@ -1136,7 +1150,12 @@ arg=$1
       echo "Calculating molecular weight" >> $(readlink /proc/$$/fd/2)
      fi
      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
-     paste <(cut --fields=1 $INFILE | tr -d ">") <(cut --fields=2 $INFILE | calc_MW 1) <(cut --fields=2 $INFILE | calc_MW 2)
+     if [[ $MOLECULE == "DNA" ]] || [[ $MOLECULE = "RNA" ]]
+     then
+      paste <(cut --fields=1 $INFILE | tr -d ">") <(cut --fields=2 $INFILE | calc_MW 1) <(cut --fields=2 $INFILE | calc_MW 2)
+     else
+      paste <(cut --fields=1 $INFILE | tr -d ">") <(cut --fields=2 $INFILE | calc_MW 1)
+     fi
      if [ ! -z ${verbose+x} ]
       then
        echo -n "Molecular weight done: " >> $(readlink /proc/$$/fd/2)
