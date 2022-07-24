@@ -726,13 +726,6 @@ arg=$1
       fi
      fi
      
-     # Retain originl headers
-     if [ ! -z ${maxseq+x} ]
-     then
-      HEADERS_ORIG=$(mktemp)
-      cp --force $HEADERS $HEADERS_ORIG
-     fi
-     
      # Change frame
      if [ "${#frame[@]}" -ne 1 ] || [ ${frame[0]} -ne 1 ]
      then
@@ -910,8 +903,8 @@ arg=$1
        
       done
       
-      cat $ORFHEADERS2 >> $HEADERS_TMP
-      cat $ORFFILE2 >> $OUTFILE
+      cat $ORFHEADERS2 > HEADCORE$orf_core
+      cat $ORFFILE2 > OUTCORE$orf_core
       
       # Cleanup
       rm --force $ORFFILE1 $ORFFILE2 $ORFFILE3 $ORFHEADERS $ORFHEADERS2
@@ -958,12 +951,20 @@ arg=$1
 
       for ((core=0;core <= $(($threads - 1));core++))
       do
+       declare OUTCORE$core=$(mktemp)
+       declare HEADCORE$core=$(mktemp)
        get_orfs ${start[$core]} ${end[$core]} $core $INFILE $HEADERS &
        pids[$core]=$!
       done     
       for pid in ${pids[*]}
       do
        wait $pid
+      done
+      for ((core=0;core <= $(($threads - 1));core++))
+      do
+       cat OUTCORE$core >> $OUTFILE
+       cat HEADCORE$core >> $HEADERS_TMP
+       rm --force OUTCORE$core HEADCORE$core
       done
      
      rm --force $HEADERS
@@ -1047,16 +1048,10 @@ arg=$1
      then
       if [ ! -z ${verbose+x} ]; then echo "Extracting "$maxseq" longest sequence(s) for each input sequence" >> $(readlink /proc/$$/fd/2); fi
       SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
-      : > $OUTFILE
-      for ((header_max=1;header_max<=$(cat $HEADERS_ORIG | wc -l);header_max++))
-      do
-       header_find=$(head --lines=$header_max $HEADERS_ORIG | tail -1)
-       awk -F $'\t' -v header_find="$header_find" '{OFS="\t"}; {hfind=header_find"\t"}; {headers=$1}; {seq=$2}; {gsub(/_orf[0-9]+/,"",$1)}; {gsub(/_frame[0-9]+/,"",$1)}; {gsub("*","",$2)}; $0~hfind{print length($2),headers,seq}' $INFILE |
-       sort --parallel="$threads" --numeric-sort --reverse |
-       head -n $maxseq |
-       cut --fields=2,3 >> $OUTFILE
-      done
-      rm --force $HEADERS_ORIG
+      awk -F $'\t' '{OFS="\t"}; {headers=$1}; {seq=$2}; {gsub(/_orf[0-9]+/,"",$1)}; {gsub(/_frame[0-9]+/,"",$1)}; {gsub("*","",$2)}; {print length($2),$1,headers,seq}' $INFILE |
+      sort --parallel="$threads" --numeric-sort --reverse |
+      sort --parallel="$threads" --unique --key=2,2 |
+      cut --fields=3,4 > $OUTFILE
      fi
      
      if [ ! -z ${unique+x} ]
