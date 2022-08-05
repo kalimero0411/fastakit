@@ -37,6 +37,7 @@ fastakit [OPTIONS] [Sequence.fasta | stdin]
 	--maxseq Return the # of largest sequences for each input sequence (ORFs, proteins, etc.)
 	--check	Check if FASTA file is single line
 	--fullprot	Return only ORFs/proteins with start and stop codons
+	--re_sites	Detect restriction enzyme recognition sites for each sequence (Incompatible with protein sequences)
 	--ignorestart	Ignore start codon when getting ORFs
 	-t | --threads #	Number of CPU threads to use (Default = Detected processors or 1)
 	-v | --verbose	Verbose
@@ -187,6 +188,10 @@ arg=$1
   MW=1
   shift
   ;;
+  --re_sites)
+  renz=1
+  shift
+  ;;
   -v | --verbose)
   verbose=1 # Print file names and arguments
   shift
@@ -234,7 +239,7 @@ arg=$1
   fi
   
   # Time function
-  function show_time () {
+  function show_time(){
     num=$1
     min=0
     hour=0
@@ -262,157 +267,225 @@ arg=$1
 
   # Translation function
   function translate(){
-	while read seq
-	do
-	echo $seq |
-	awk '{print tolower($0)}' | 
+	input=$1 &&
+	cat $input |
 	sed --regexp-extended \
-        's/a[tu]g/M/g;
-         s/a[tu][tuc]/I/g;
-         s/ac[actug]/T/g;
-         s/aa[tuc]/N/g;
-         s/aa[ag]/K/g;
-         s/ag[tuc]/S/g;
-         s/[tu][tu][tuc]/F/g;
-         s/[tu][tu][ag]/L/g;
-         s/[tu]c[acgtu]/S/g;
-         s/[tu]a[tuc]/Y/g;
-         s/[tu]a[ag]/*/g;
-         s/[tu]g[tuc]/C/g;
-         s/[tu]gg/W/g;
-         s/cc[acgtu]/P/g;
-         s/ca[tuc]/H/g;
-         s/ca[ag]/Q/g;
-         s/cg[gtu]/R/g;
-         s/g[tu][acgtu]/V/g;
-         s/gc[acgtu]/A/g;
-         s/ga[tcu]/D/g;
-         s/ga[ag]/E/g;
-         s/gg[acgtu]/G/g' |
+        's/a[tu]g/M/gi;
+         s/a[tu][tuc]/I/gi;
+         s/ac[actug]/T/gi;
+         s/aa[tuc]/N/gi;
+         s/aa[ag]/K/gi;
+         s/ag[tuc]/S/gi;
+         s/[tu][tu][tuc]/F/gi;
+         s/[tu][tu][ag]/L/gi;
+         s/[tu]c[acgtu]/S/gi;
+         s/[tu]a[tuc]/Y/gi;
+         s/[tu]a[ag]/*/gi;
+         s/[tu]g[tuc]/C/gi;
+         s/[tu]gg/W/gi;
+         s/cc[acgtu]/P/gi;
+         s/ca[tuc]/H/gi;
+         s/ca[ag]/Q/gi;
+         s/cg[gtu]/R/gi;
+         s/g[tu][acgtu]/V/gi;
+         s/gc[acgtu]/A/gi;
+         s/ga[tcu]/D/gi;
+         s/ga[ag]/E/gi;
+         s/gg[acgtu]/G/gi' |
          
          # Standard code
          if [[ $translate_table = 1 ]]
          then
           sed --regexp-extended \
-           's/a[tu]a/I/g;
-            s/ag[ag]/R/g;
-            s/c[tu][acgtu]/L/g;
-            s/cg[ac]/R/g;
-            s/[tu]ga/*/g;'
+           's/a[tu]a/I/gi;
+            s/ag[ag]/R/gi;
+            s/c[tu][acgtu]/L/gi;
+            s/cg[ac]/R/gi;
+            s/[tu]ga/*/gi;'
        
          # Vertebrate mitochondrial code
          elif [[ $translate_table = 2 ]]
          then
           sed --regexp-extended \
-           's/a[tu]a/M/g;
-            s/ag[ag]/*/g;
-            s/c[tu][acgtu]/L/g;
-            s/cg[ac]/R/g;
-            s/[tu]ga/W/g;'
+           's/a[tu]a/M/gi;
+            s/ag[ag]/*/gi;
+            s/c[tu][acgtu]/L/gi;
+            s/cg[ac]/R/gi;
+            s/[tu]ga/W/gi;'
        
          # Yeast mitochondrial code
          elif [[ $translate_table = 3 ]]
           then
           sed --regexp-extended \
-           's/a[tu]a/M/g;
-            s/ag[ag]/R/g;
-            s/c[tu][acgtu]/T/g;
-            s/cg[ac]/X/g;
-            s/[tu]ga/W/g;'
+           's/a[tu]a/M/gi;
+            s/ag[ag]/R/gi;
+            s/c[tu][acgtu]/T/gi;
+            s/cg[ac]/X/gi;
+            s/[tu]ga/W/gi;'
        
          # Mold, protozoan, and coelenterate mitochondrial code and the mycoplasma/spiroplasma code
          elif [[ $translate_table = 4 ]]
           then
            sed --regexp-extended \
-            's/a[tu]a/I/g;
-             s/ag[ag]/R/g;
-             s/c[tu][acgtu]/L/g;
-             s/cg[ac]/R/g;
-             s/[tu]ga/M/g;'
+            's/a[tu]a/I/gi;
+             s/ag[ag]/R/gi;
+             s/c[tu][acgtu]/L/gi;
+             s/cg[ac]/R/gi;
+             s/[tu]ga/M/gi;'
           else
            echo "Error: Unknown translation code"
            tables
            exit 1
          fi
-     done
 }
   
   # Residue weights
   function calc_MW(){
 	strand=$1
-	while read seq
-	do
-	echo $seq |
+	cat $2 |
 	if [[ $MOLECULE == "PROTEIN" ]]
 	then
-	 tr -d "*" |
-#	 awk '{print toupper($0)}' | 
-	 sed --regexp-extended \
-         's/M/131.1926 /g;
-          s/I/113.1594 /g;
-          s/T/101.1051 /g;
-          s/N/114.1038 /g;
-          s/K/128.1741 /g;
-          s/S/87.0782 /g;
-          s/F/147.1766 /g;
-          s/L/113.1594 /g;
-          s/Y/163.176 /g;
-          s/C/103.1388 /g;
-          s/W/186.2132 /g;
-          s/P/97.1167 /g;
-          s/H/137.1411 /g;
-          s/Q/128.1307 /g;
-          s/R/156.1875 /g;
-          s/V/99.1326 /g;
-          s/A/71.0788 /g;
-          s/D/115.0886 /g;
-          s/E/129.1155 /g;
-          s/G/57.0519 /g;
-          s/ $//g' |
-           awk -F ' ' '{for(i=1;i<=NF;i++) t+=$i; print t+18.01528; t=0}'
+	 tr -d "*Xx" |
+	 parallel -k -j"$threads" --block 30M --pipe 'sed --regexp-extended \
+         "s/M/131.1926 /gi;
+          s/I/113.1594 /gi;
+          s/T/101.1051 /gi;
+          s/N/114.1038 /gi;
+          s/K/128.1741 /gi;
+          s/S/87.0782 /gi;
+          s/F/147.1766 /gi;
+          s/L/113.1594 /gi;
+          s/Y/163.176 /gi;
+          s/C/103.1388 /gi;
+          s/W/186.2132 /gi;
+          s/P/97.1167 /gi;
+          s/H/137.1411 /gi;
+          s/Q/128.1307 /gi;
+          s/R/156.1875 /gi;
+          s/V/99.1326 /gi;
+          s/A/71.0788 /gi;
+          s/D/115.0886 /gi;
+          s/E/129.1155 /gi;
+          s/G/57.0519 /gi;
+          s/ $//g"' |
+          awk -F ' ' '{for(i=1;i<=NF;i++) t+=$i; printf "%.5f\n", t+18.01528; t=0}'
          elif [[ $MOLECULE == "DNA" ]]
          then
-         awk '{print tolower($0)}' |
          if [ $strand -eq 1 ]
          then
-          sed --regexp-extended \
-          's/a/313.20672 /g;
-           s/t/304.19322 /g;
-           s/c/289.18182 /g;
-           s/g/329.20592 /g;
-           s/ $//g;' |
-           awk -F ' ' '{for(i=1;i<=NF;i++) t+=$i; print t+18.01528; t=0}'
+          parallel -k -j"$(($threads/2))" --block 30M --pipe 'sed --regexp-extended \
+          "s/a/313.20672 /gi;
+           s/t/304.19322 /gi;
+           s/c/289.18182 /gi;
+           s/g/329.20592 /gi;
+           s/ $//g;"' |
+           awk -F ' ' '{for(i=1;i<=NF;i++) t+=$i; printf "%.5f\n", t+18.01528; t=0}'
          else 
-          sed --regexp-extended \
-          's/[at]/313.20672 304.19322 /g;
-           s/[cg]/289.18182 329.20592 /g;
-           s/ $//g;' |
-           awk -F ' ' '{for(i=1;i<=NF;i++) t+=$i; print t+(2*18.01528); t=0}'
+          parallel -k -j"$(($threads/2))" --block 30M --pipe 'sed --regexp-extended \
+          "s/[at]/313.20672 304.19322 /gi;
+           s/[cg]/289.18182 329.20592 /gi;
+           s/ $//g;"' |
+           awk -F ' ' '{for(i=1;i<=NF;i++) t+=$i; printf "%.5f\n", t+(2*18.01528); t=0}'
          fi
          elif [[ $MOLECULE == "RNA" ]]
          then
-         awk '{print tolower($0)}' |
          if [ $strand -eq 1 ]
          then
-          sed --regexp-extended \
-          's/a/313.20672 /g;
-           s/u/306.16602 /g;
-           s/c/289.18182 /g;
-           s/g/329.20592 /g;
-           s/ $//g;' |
-           awk -F ' ' '{for(i=1;i<=NF;i++) t+=$i; print t+18.01528; t=0}'
+          parallel -k -j"$(($threads/2))" --block 30M --pipe 'sed --regexp-extended \
+          "s/a/313.20672 /gi;
+           s/u/306.16602 /gi;
+           s/c/289.18182 /gi;
+           s/g/329.20592 /gi;
+           s/ $//g;"' |
+           awk -F ' ' '{for(i=1;i<=NF;i++) t+=$i; printf "%.5f\n", t+18.01528; t=0}'
           else
-           sed --regexp-extended \
-          's/[au]/313.20672 306.16602 /g;
-           s/[cg]/289.18182 329.20592 /g;
-           s/ $//g;' |
-           awk -F ' ' '{for(i=1;i<=NF;i++) t+=$i; print t+18.01528; t=0}'
+           parallel -k -j"$(($threads/2))" --block 30M --pipe 'sed --regexp-extended \
+          "s/[au]/313.20672 306.16602 /gi;
+           s/[cg]/289.18182 329.20592 /gi;
+           s/ $//g;"' |
+           awk -F ' ' '{for(i=1;i<=NF;i++) t+=$i; printf "%.5f\n", t+18.01528; t=0}'
           fi
-          else
-           echo "Error detecting molecule"
-           exit 1
           fi
-         done
+     }
+     
+     function detect_mol(){
+     local input=$1
+     if $(head -5 $input | awk '{seq=length($0); gsub("[actguACTGU]","",$0)}; length($0)/seq > 0.25{exit 1}')
+     then
+      MOL=$(mktemp)
+      export input
+      export MOL
+      parallel -j2 --halt now,success=1 ::: \
+      'grep --ignore-case --max-count=1 "T" $input > /dev/null && echo "DNA" > $MOL' \
+      'grep --ignore-case --max-count=1 "U" $input > /dev/null && echo "RNA" > $MOL' &> /dev/null
+      MOLECULE=$(cat $MOL)
+     else
+      MOLECULE="PROTEIN"
+     fi
+     rm --force $MOL
+     if [ ! -z ${verbose+x} ]; then echo "Detected molecule: "$MOLECULE >> $(readlink /proc/$$/fd/2); fi
+     }
+     
+     function res_enz(){
+      local input=$(mktemp)
+      local reout=$(mktemp)
+      local enztmp=$(mktemp)
+      cut --fields=2 $1 > $input
+      if [ -f $(echo $(dirname $(readlink --canonicalize $(which fastakit)))"/neb_rebase") ]
+      then
+       retmp=$(echo $(dirname $(readlink --canonicalize $(which fastakit)))"/neb_rebase")
+       repat=($(cut --fields=2 $retmp | tr "\n" " "))
+       reheads=($(cut --fields=1 $retmp | tr "\n" " "))
+      else
+       reheads=$(mktemp)
+       repat=$(mktemp)
+       retmp=$(mktemp)
+       if [ ! -z ${verbose+x} ]; then echo "Downloading restriction enzyme recognition sites..." >> $(readlink /proc/$$/fd/2); fi
+       wget --quiet --output-document=- ftp://ftp.neb.com/pub/rebase/withref.txt |
+       grep --perl-regexp "\<1\>|\<5\>" |
+       tr -d "\n" |
+       sed --regexp-extended 's/<1>/\n/g; s/<5>/\t/g' |
+       grep --invert-match "?" |
+       tee $reheads |
+       cut -f2 |
+       sed --regexp-extended \
+       's/[?/\^()]//g;
+       s/[0-9]//g;
+       s/[-]//g;
+       s/,/|/g;
+       s/n/[actgu]/gi;
+       s/r/[ag]/gi;
+       s/y/[ctu]/gi;
+       s/m/[ac]/gi;
+       s/k/[gtu]/gi;
+       s/s/[gc]/gi;
+       s/w/[atu]/gi;
+       s/b/[cgtu]/gi;
+       s/d/[agtu]/gi;
+       s/h/[actu]/gi;
+       s/v/[acg]/gi' |
+       grep --perl-regexp --invert-match "^$" > $repat
+       paste <(cut --fields=1 $reheads | grep --perl-regexp --invert-match "^$") $repat |
+       sort -k2,2 | uniq -f1 --group="both" > $retmp
+       paste <(cut --fields=1 | tr "\n" ";" | sed -E 's/;;/\n/g; s/^;//g' $retmp) <(cut --fields=2 | grep -v "^$" | uniq) > $repat
+       rm --force $retmp
+       retmp=$repat
+       rm --force $repat $reheads
+       repat=($(cut --fields=2 $retmp | tr "\n" " "))
+       reheads=($(cut --fields=1 $retmp | tr "\n" " "))
+       rm --force $retmp
+      fi
+      for ((re=0; re <= $((${#repat[@]} - 1)); re++))
+      do
+       repat_tmp=${repat[$re]}
+       reheads_tmp=${reheads[$re]}
+       paste $reout <(awk -v repat=$repat_tmp -v reheads=$reheads_tmp '{IGNORECASE = 1; if ($0 ~ repat) print reheads; else print ""}' $input | tr ";" "\t") > $enztmp
+       cp --force $enztmp $reout
+       if [ ! -z ${verbose+x} ]; then echo -en "\033[2K"$((100 * ($re + 1) / ${#repat[@]}))"% | "${reheads[$re]/;*}"\r" >> $(readlink /proc/$$/fd/2); fi
+      done
+      if [ ! -z ${verbose+x} ]; then echo -en "\n\n" >> $(readlink /proc/$$/fd/2); fi
+      sed --regexp-extended 's/\t+/\t/g; s/^\t//g; s/\t$//g' $reout
+      rm --force $enztmp $reout $input
      }
       
   # Frame exception
@@ -600,8 +673,8 @@ arg=$1
      lengths=$(mktemp)
      awk '{print length($0)}' $OUTFILE | sort -rn > $lengths
      total=$(awk '{OFS="\t"}; {sum+=$0}; END{printf "%.0f", sum}' $lengths)
-     n50_idx=$(awk '{OFS="\t"}; {sum+=$0}; {printf "%s%s%.0f\n", NR,OFS,sum}' $lengths | awk -v total=$total -F $'\t' '{if($2 > (total*0.5))printf "%.0f\n", $1}' | head -1)
-     n90_idx=$(awk '{OFS="\t"}; {sum+=$0}; {printf "%s%s%.0f\n", NR,OFS,sum}' $lengths | awk -v total=$total -F $'\t' '{if($2 > (total*0.9))printf "%.0f\n", $1}' | head -1)
+     l50_idx=$(awk '{OFS="\t"}; {sum+=$0}; {printf "%s%s%.0f\n", NR,OFS,sum}' $lengths | awk -v total=$total -F $'\t' '{if($2 > (total*0.5))printf "%.0f\n", $1}' | head -1)
+     l90_idx=$(awk '{OFS="\t"}; {sum+=$0}; {printf "%s%s%.0f\n", NR,OFS,sum}' $lengths | awk -v total=$total -F $'\t' '{if($2 > (total*0.9))printf "%.0f\n", $1}' | head -1)
      num_seq=$(cat $lengths | wc -l)
      half_num=$(awk -v num_seq=$num_seq 'NR==(int(num_seq/2)+1){printf $0}' $lengths)
      echo -e "Total length\t"$total >> $(readlink /proc/$$/fd/2)
@@ -611,28 +684,17 @@ arg=$1
      echo -e "Median\t"$(awk -v num_seq=$num_seq -v half_num=$half_num 'NR==int(num_seq/2){if(num_seq/2 == int(num_seq/2)) printf "%.1f", ($0+half_num)/2; else printf "%.0f", $0}' $lengths) >> $(readlink /proc/$$/fd/2)
      echo -e "Mean\t"$(bc <<< "scale=2; $total/$num_seq") >> $(readlink /proc/$$/fd/2)
      echo -e "GC%\t"$(bc <<< "scale=2; $(cat $OUTFILE | tr -d "\n" | tr -d "[AaTtUu]" | wc -m)*100/$(cat $OUTFILE | tr -d "\n" | wc -m)") >> $(readlink /proc/$$/fd/2)
-     echo -e "N50\t"$(awk -v n50_idx=$n50_idx 'NR==n50_idx{printf "%.0f", $0}' $lengths) >> $(readlink /proc/$$/fd/2)
-     echo -e "L50\t"$n50_idx >> $(readlink /proc/$$/fd/2)
-     echo -e "N90\t"$(awk -v n90_idx=$n90_idx 'NR==n90_idx{printf "%.0f", $0}' $lengths) >> $(readlink /proc/$$/fd/2)
-     echo -e "L90\t"$n90_idx >> $(readlink /proc/$$/fd/2)
+     echo -e "L50\t"$(awk -v l50_idx=$l50_idx 'NR==l50_idx{printf "%.0f", $0}' $lengths) >> $(readlink /proc/$$/fd/2)
+     echo -e "N50\t"$l50_idx >> $(readlink /proc/$$/fd/2)
+     echo -e "L90\t"$(awk -v l90_idx=$l90_idx 'NR==l90_idx{printf "%.0f", $0}' $lengths) >> $(readlink /proc/$$/fd/2)
+     echo -e "N90\t"$l90_idx >> $(readlink /proc/$$/fd/2)
      rm --force $lengths
      exit 0
     fi
     
-    if [ ! -z ${complement+x} ] || [ ! -z ${rna_dna+x} ] || [ ! -z ${random+x} ] || [ ! -z ${MW+x} ]
+    if [ ! -z ${complement+x} ] || [ ! -z ${rna_dna+x} ] || [ ! -z ${random+x} ] || [ ! -z ${renz+x} ]
     then
-     if $(head -5 $OUTFILE | awk '{seq=length($0); gsub("[actguACTGU]","",$0)}; length($0)/seq > 0.25{exit 1}')
-     then
-      MOL=$(mktemp)
-      export OUTFILE
-      export MOL
-      parallel -j2 --halt now,success=1 ::: \
-      'grep --ignore-case --max-count=1 "T" $OUTFILE > /dev/null && echo "DNA" > $MOL' \
-      'grep --ignore-case --max-count=1 "U" $OUTFILE > /dev/null && echo "RNA" > $MOL' &> /dev/null
-      MOLECULE=$(cat $MOL)
-     else
-      MOLECULE="PROTEIN"
-     fi
+     detect_mol $OUTFILE
     fi
      
      if [ ! -z ${random+x} ]
@@ -821,25 +883,24 @@ arg=$1
       awk -F '' '{for(i=1; i<=NF; i+=3) {printf "%s%s ", $i,$(i+1)$(i+2);}; print ""}' $ORFFILE1 |
       if [ -z ${ignorestart+x} ]
        then
-        awk -F $'\t' '{if(match(tolower($0),"a[tu]g") > 0) print substr($0,match(tolower($0),"a[tu]g"));
-       if(match(tolower($0),"a[tu]g") == 0) print ""}'
+        awk -F $'\t' '{IGNORECASE = 1; if(match($0,"a[tu]g") > 0) print substr($0,match($0,"a[tu]g"));
+       if(match($0,"a[tu]g") == 0) print ""}'
        else
         cat -
        fi |
       tee $ORFFILE3 |
       if [ ! -z ${fullprot+x} ]
       then
-       awk -F $'\t' '{if(match(tolower($0),"[tu]a[ag]|[tu]ga") > 0) print substr($0,1,match(tolower($0),"[tu]a[ag]|[tu]ga")+2);
-      if(match(tolower($0),"[tu]a[ag]|[tu]ga") == 0) print ""}'
+       awk -F $'\t' '{IGNORECASE = 1; if(match($0,"[tu]a[ag]|[tu]ga") > 0) print substr($0,1,match($0,"[tu]a[ag]|[tu]ga")+2);
+      if(match($0,"[tu]a[ag]|[tu]ga") == 0) print ""}'
       else
-       awk -F $'\t' '{if(match(tolower($0),"[tu]a[ag]|[tu]ga") > 0) print substr($0,1,match(tolower($0),"[tu]a[ag]|[tu]ga")+2);
-      if(match(tolower($0),"[tu]a[ag]|[tu]ga") == 0) print $0}'
+       awk -F $'\t' '{IGNORECASE = 1; if(match($0,"[tu]a[ag]|[tu]ga") > 0) print substr($0,1,match($0,"[tu]a[ag]|[tu]ga")+2);
+      if(match($0,"[tu]a[ag]|[tu]ga") == 0) print $0}'
       fi |
       if [ ! -z ${translate+x} ] && [ -z ${min_max_seq_length+x} ]
       then
-       translate |
-       sed --regexp-extended 's/[actgu]//g' |
-       tr -d " " |
+       translate - |
+       tr -d " [:lower:]" |
        if [ ! -z ${min_prot+x} ]
        then
         awk -v min_prot_length="$min_prot_length" '{if(match($0,"*|$") - 1 >= min_prot_length) print $0;
@@ -865,29 +926,28 @@ arg=$1
        : > $ORFFILE3
        
        # Cut until first start and stop codon or until end of line
-       awk -F $'\t' '{if(match(tolower($0),"[tu]a[ag]|[tu]ga") > 0) print substr($0,match(tolower($0),"[tu]a[ag]|[tu]ga")+4);
-       if(match(tolower($0),"[tu]a[ag]|[tu]ga") == 0) print ""}' $ORFFILE1 |
+       awk -F $'\t' '{IGNORECASE = 1; if(match($0,"[tu]a[ag]|[tu]ga") > 0) print substr($0,match($0,"[tu]a[ag]|[tu]ga")+4);
+       if(match($0,"[tu]a[ag]|[tu]ga") == 0) print ""}' $ORFFILE1 |
        if [ -z ${ignorestart+x} ]
        then
-        awk -F $'\t' '{if(match(tolower($0),"a[tu]g") > 0) print substr($0,match(tolower($0),"a[tu]g"));
-       if(match(tolower($0),"a[tu]g") == 0) print ""}'
+        awk -F $'\t' '{IGNORECASE = 1; if(match($0,"a[tu]g") > 0) print substr($0,match($0,"a[tu]g"));
+       if(match($0,"a[tu]g") == 0) print ""}'
        else
         cat -
        fi |
        tee $ORFFILE3 |
        if [ ! -z ${fullprot+x} ]
       then
-       awk -F $'\t' '{if(match(tolower($0),"[tu]a[ag]|[tu]ga") > 0) print substr($0,1,match(tolower($0),"[tu]a[ag]|[tu]ga")+2);
-      if(match(tolower($0),"[tu]a[ag]|[tu]ga") == 0) print ""}'
+       awk -F $'\t' '{IGNORECASE = 1; if(match($0,"[tu]a[ag]|[tu]ga") > 0) print substr($0,1,match($0,"[tu]a[ag]|[tu]ga")+2);
+      if(match($0,"[tu]a[ag]|[tu]ga") == 0) print ""}'
       else
-       awk -F $'\t' '{if(match(tolower($0),"[tu]a[ag]|[tu]ga") > 0) print substr($0,1,match(tolower($0),"[tu]a[ag]|[tu]ga")+2);
-      if(match(tolower($0),"[tu]a[ag]|[tu]ga") == 0) print $0}'
+       awk -F $'\t' '{IGNORECASE = 1; if(match($0,"[tu]a[ag]|[tu]ga") > 0) print substr($0,1,match($0,"[tu]a[ag]|[tu]ga")+2);
+      if(match($0,"[tu]a[ag]|[tu]ga") == 0) print $0}'
       fi |
        if [ ! -z ${translate+x} ] && [ -z ${min_max_seq_length+x} ]
        then
-        translate |
-        sed --regexp-extended 's/[actgu]//g' |
-        tr -d " " |
+        translate - |
+        tr -d " [:lower:]" |
         if [ ! -z ${min_prot+x} ]
         then
          awk -v min_prot_length="$min_prot_length" '{if(match($0,"*|$") - 1 >= min_prot_length) print $0;
@@ -1007,7 +1067,7 @@ arg=$1
      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
      if [ ! -z ${verbose+x} ]
      then
-      echo "Translate | frame "$frame >> $(readlink /proc/$$/fd/2)
+      echo "Translate | frame(s) "${frame[@]} >> $(readlink /proc/$$/fd/2)
      fi
      if [ ! -z ${verbose+x} ] && [ $translate_table -ne 1 ]
      then
@@ -1018,9 +1078,8 @@ arg=$1
       echo "Minimum protein length: "$min_prot_length >> $(readlink /proc/$$/fd/2)
      fi
      awk -F '' '{for(i=1; i<=NF; i+=3) {printf "%s%s ", $i,$(i+1)$(i+2);}; print ""}' $INFILE |
-      translate |
-       sed --regexp-extended 's/[atcgu]{1,}$//g' |
-       tr -d " " |
+      translate - |
+       tr -d " [:lower:]" |
        
        # remove if less than cutoff
        if [ ! -z ${min_prot+x} ]
@@ -1040,6 +1099,7 @@ arg=$1
     
      # Combine headers and sequences
      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
+     if [ ! -z ${MW+x} ]; then detect_mol $INFILE; fi
      paste $HEADERS $INFILE |
      grep --perl-regexp --invert-match "\t$" > $OUTFILE
      
@@ -1134,22 +1194,24 @@ arg=$1
        show_time $(($(date +%s) - time_start))
        echo "" >> $(readlink /proc/$$/fd/2)
       fi
+      rm --force $INFILE $OUTFILE $HEADERS
       exit 0
      fi
      
      # Calculate molucular weight
     if [ ! -z ${MW+x} ]
     then
-    if [ ! -z ${verbose+x} ]
-     then
-      echo "Calculating molecular weight" >> $(readlink /proc/$$/fd/2)
-     fi
+    if [ ! -z ${verbose+x} ]; then echo "Calculating molecular weight" >> $(readlink /proc/$$/fd/2); fi
      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
      if [[ $MOLECULE == "DNA" ]] || [[ $MOLECULE = "RNA" ]]
      then
-      paste <(cut --fields=1 $INFILE | tr -d ">") <(cut --fields=2 $INFILE | calc_MW 1) <(cut --fields=2 $INFILE | calc_MW 2)
-     else
+      paste <(cut --fields=1 $INFILE | tr -d ">") <(cut --fields=2 $INFILE | calc_MW 1 -) <(cut --fields=2 $INFILE | calc_MW 2 -)
+     elif [[ $MOLECULE == "PROTEIN" ]]
+     then
       paste <(cut --fields=1 $INFILE | tr -d ">") <(cut --fields=2 $INFILE | calc_MW 1)
+     else
+      echo "Error detecting molecule" >> $(readlink /proc/$$/fd/2)
+      exit 1
      fi
      if [ ! -z ${verbose+x} ]
       then
@@ -1157,9 +1219,26 @@ arg=$1
        show_time $(($(date +%s) - time_start))
        echo "" >> $(readlink /proc/$$/fd/2)
       fi
+      rm --force $INFILE $OUTFILE $HEADERS
       exit 0
     fi
     
+     # Detect restriction sites
+     if [ ! -z ${renz+x} ] && [[ $MOLECULE != "PROTEIN" ]]
+     then
+     if [ ! -z ${verbose+x} ]; then echo "Detecting restriction sites" >> $(readlink /proc/$$/fd/2); fi
+      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
+      paste <(cut --fields=1 $INFILE | tr -d ">") <(res_enz $INFILE)
+      if [ ! -z ${verbose+x} ]
+      then
+       echo -n "Restriction site detection done: " >> $(readlink /proc/$$/fd/2)
+       show_time $(($(date +%s) - time_start))
+       echo "" >> $(readlink /proc/$$/fd/2)
+      fi
+      rm --force $INFILE $OUTFILE $HEADERS
+      exit 0
+     fi
+     
      # Separate sequences into files
      if [ ! -z ${separate+x} ]
      then
@@ -1178,6 +1257,7 @@ arg=$1
        echo -en "\nSequence separation done: " >> $(readlink /proc/$$/fd/2)
        show_time $(($(date +%s) - time_start))
       fi
+      rm --force $INFILE $OUTFILE $HEADERS
       exit 0
      fi
      
@@ -1204,7 +1284,7 @@ arg=$1
     fi
     
     # Cleanup temp files
-    rm --force $INFILE $OUTFILE $HEADERS $MOL
+    rm --force $INFILE $OUTFILE $HEADERS
     if [ ! -z ${stdin+x} ]
     then
      rm --force $FILE
