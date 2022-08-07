@@ -146,7 +146,7 @@ arg=$1
   shift 2
   ;;
   --version)
-  echo "fastakit version 22.04" >> $(readlink /proc/$$/fd/2)
+  echo "fastakit version 22.08" >> $(readlink /proc/$$/fd/2)
   exit 0
   ;;
   --check)

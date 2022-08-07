@@ -19,22 +19,24 @@ fastakit [OPTIONS] [Sequence.fasta | stdin]
 	--max_orf_num #	Maximum number of ORFs to output per sequence
 	-p | --translate	Protein sequences in current frame
 	--table #	Translation code (Default = standard code)
-	--frame #	Frame to extract codons (Frames 1, 2 or 3; 0 = six frames; Default = 1)
+	--frame #	Frame to extract codons (Any of frames 1,2,3,4,5,6; 0 = six frames; Default = 1)
 	--min_prot #	Minimum protein size (Assumes --translate)
-	--gc	Get percent GC per sequence (Disables --translate)
+	--gc	Calculate percent GC per sequence (Disables --translate)
 	--mw	Calculate the moleculare weight of DNA/RNA/protein per sequence (ss ds)
-	--separate DIR  Separate sequnces into files in directory DIR
-	--nonnuc        Non-ACTGU characters (0 ignored)
+	--separate DIR	Separate sequnces into files in directory DIR
+	--nonnuc	Non-ACTGU characters (0 ignored)
 	--rna_dna	Convert RNA to DNA / DNA to RNA (Default = no conversion)
 	--min_max_seq #,#	Minimum/Maximum sequence size (e.g. 10,50 ; 0 to ignore)
 	--maxseq Return the # of largest sequences for each input sequence (ORFs, proteins, etc.)
 	--check	Check if FASTA file is single line
 	--fullprot	Return only ORFs/proteins with start and stop codons
-	--re      Detect restriction enzyme recognition sites for each sequence (Incompatible with protein sequences)
+	--re #,#,#,#	Detect restriction enzyme recognition sites (min_length,max_length,min_number,max_number; 0 to ignore)
 	--ignorestart	Ignore start codon when getting ORFs
 	-t | --threads #	Number of CPU threads to use (Default = Detected processors or 1)
 	-v | --verbose	Verbose
 	-h | --help	Display help
+	--stats	Calculate basic stats
+	--version	Print version date
 
 
 	Available translation codes:
