@@ -37,7 +37,7 @@ fastakit [OPTIONS] [Sequence.fasta | stdin]
 	--maxseq Return the # of largest sequences for each input sequence (ORFs, proteins, etc.)
 	--check	Check if FASTA file is single line
 	--fullprot	Return only ORFs/proteins with start and stop codons
-	--re_sites	Detect restriction enzyme recognition sites for each sequence (Incompatible with protein sequences)
+	--re #,#,#,#	Detect restriction enzyme recognition sites (min_length,max_length,min_number,max_number; 0 to ignore)
 	--ignorestart	Ignore start codon when getting ORFs
 	-t | --threads #	Number of CPU threads to use (Default = Detected processors or 1)
 	-v | --verbose	Verbose
@@ -160,7 +160,10 @@ arg=$1
   shift 2
   ;;
   --min_max_seq)
+  OFS=$IFS
+  IFS=","
   IFS="," min_max_seq_length=($(echo "$2")) # Minimum/Maximum nucleotide sequence size
+  IFS=$OFS
   shift 2
   ;;
   -t | --threads)
@@ -188,9 +191,13 @@ arg=$1
   MW=1
   shift
   ;;
-  --re_sites)
+  --re)
   renz=1
-  shift
+  OFS=$IFS
+  IFS=","
+  min_max_re=($(echo "$2")) # Minimum/Maximum re length/number
+  IFS=$OFS
+  shift 2
   ;;
   -v | --verbose)
   verbose=1 # Print file names and arguments
@@ -431,11 +438,17 @@ arg=$1
       local reout=$(mktemp)
       local enztmp=$(mktemp)
       cut --fields=2 $1 > $input
+      local repat_min=$2
+      local repat_max=$3
+      local resites_min=$4
+      local resites_max=$5
+      
+      # Get list of all restriction enzymes and their regex pattern
       if [ -f $(echo $(dirname $(readlink --canonicalize $(which fastakit)))"/neb_rebase") ]
       then
-       retmp=$(echo $(dirname $(readlink --canonicalize $(which fastakit)))"/neb_rebase")
-       repat=($(cut --fields=2 $retmp | tr "\n" " "))
-       reheads=($(cut --fields=1 $retmp | tr "\n" " "))
+       local retmp=$(echo $(dirname $(readlink --canonicalize $(which fastakit)))"/neb_rebase")
+       local repat=($(cut --fields=2 $retmp | tr "\n" " "))
+       local reheads=($(cut --fields=1 $retmp | tr "\n" " "))
       else
        reheads=$(mktemp)
        repat=$(mktemp)
@@ -475,19 +488,26 @@ arg=$1
        reheads=($(cut --fields=1 $retmp | tr "\n" " "))
        rm --force $retmp
       fi
+      
+      # Loop over all restriction enzymes
       for ((re=0; re <= $((${#repat[@]} - 1)); re++))
       do
+       repat_len=$(echo $(($(sed --regexp-extended 's/[[][actgu]+[]]/[/gi' <(echo "${repat[$re]}") | wc -m) - 1)))
+       if [ "$repat_len" -lt "$repat_min" ] ||  ([ "$repat_max" -ne 0 ] && [ "$repat_len" -gt "$repat_max" ])
+       then
+        continue
+       fi
        repat_tmp=${repat[$re]}
        reheads_tmp=${reheads[$re]}
-       paste $reout <(awk -v repat=$repat_tmp -v reheads=$reheads_tmp '{IGNORECASE = 1; if ($0 ~ repat) print reheads; else print ""}' $input | tr ";" "\t") > $enztmp
-       cp --force $enztmp $reout
+       paste $reout <(awk -v repat="$repat_tmp" -v reheads="$reheads_tmp" -v resites_min="$resites_min" -v resites_max="$resites_max" '{IGNORECASE = 1; seq=$0; renum=gsub(repat,"",seq); if($0 ~ repat && renum >= resites_min && (resites_max == 0 || renum <= resites_max)) print reheads; else print ""}' $input | tr ";" "\t") > $enztmp
+       SWITCH=$reout; reout=$enztmp; enztmp=$SWITCH
        if [ ! -z ${verbose+x} ]; then echo -en "\033[2K"$((100 * ($re + 1) / ${#repat[@]}))"% | "${reheads[$re]/;*}"\r" >> $(readlink /proc/$$/fd/2); fi
       done
       if [ ! -z ${verbose+x} ]; then echo -en "\n\n" >> $(readlink /proc/$$/fd/2); fi
       sed --regexp-extended 's/\t+/\t/g; s/^\t//g; s/\t$//g' $reout
       rm --force $enztmp $reout $input
      }
-      
+
   # Frame exception
   for frame_test in ${frame[@]}
   do
@@ -511,7 +531,7 @@ arg=$1
     unset $complement
     unset $rev_seq
    fi
-  
+
   # Disable translate
   if [ ! -z ${percent_GC+x} ]
   then
@@ -1228,7 +1248,7 @@ arg=$1
      then
      if [ ! -z ${verbose+x} ]; then echo "Detecting restriction sites" >> $(readlink /proc/$$/fd/2); fi
       SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
-      paste <(cut --fields=1 $INFILE | tr -d ">") <(res_enz $INFILE)
+      paste <(cut --fields=1 $INFILE | tr -d ">") <(res_enz $INFILE ${min_max_re[0]=0} ${min_max_re[1]=0} ${min_max_re[2]=0} ${min_max_re[3]=0})
       if [ ! -z ${verbose+x} ]
       then
        echo -n "Restriction site detection done: " >> $(readlink /proc/$$/fd/2)
