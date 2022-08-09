@@ -30,7 +30,7 @@ fastakit [OPTIONS] [Sequence.fasta | stdin]
 	--maxseq Return the # of largest sequences for each input sequence (ORFs, proteins, etc.)
 	--check	Check if FASTA file is single line
 	--fullprot	Return only ORFs/proteins with start and stop codons
-	--re #,#,#,#	Detect restriction enzyme recognition sites (min_length,max_length,min_number,max_number; 0 to ignore)
+	--re #,#,#,#	Detect restriction enzyme recognition sites (Restriction enzyme name, min_length, max_length, min_sites, max_sites; 0 to ignore)
 	--ignorestart	Ignore start codon when getting ORFs
 	-t | --threads #	Number of CPU threads to use (Default = Detected processors or 1)
 	-v | --verbose	Verbose
@@ -56,4 +56,7 @@ fastakit [OPTIONS] [Sequence.fasta | stdin]
 - The `--min_max_seq` option together with `--translate` applies the `--min_prot` option for the respective minimum protein size (i.e. (minimum / 3) - 1).
 - The `--check` option return exit code 0 if the FASTA file is single-line.
 - The `--mw` option detects DNA/RNA/protein sequences, and ouputs the average molecular weight of ssDNA/sRNA and dsDNA/dsRNA seperated by a tab or protein average molecular weight.
-- The `--re` option detects restriction enzyme recognition sites, but **IGNORES** cut sites and methylation sensitivity.
+- The `--re` option detects restriction enzyme recognition sites, but **IGNORES** cut sites and methylation sensitivity. The inputs for this option are a restriction enzyme name,
+	minimum and maximum length of recognition site, and minimum and maximum number of detected sites; seperated by a comma (e.g. HpaII,0,0,1,2). Each parametercaan be ignored with 0.
+- If `--re` is given a restriction enzyme name (i.e. not 0), the restrictions for recognition site length are removed.
+- The `--random` option applies after all other sequence manipulation processes.
