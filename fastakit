@@ -353,7 +353,7 @@ arg=$1
 	cat $2 |
 	if [[ $MOLECULE == "PROTEIN" ]]
 	then
-	 tr -d "*Xx" |
+	 tr --delete "*Xx" |
 	 parallel -k -j"$threads" --block 30M --pipe 'sed --regexp-extended \
          "s/M/131.1926 /gi;
           s/I/113.1594 /gi;
@@ -455,7 +455,7 @@ arg=$1
         local repat=($(cut --fields=2 $retmp | tr "\n" " "))
         local reheads=($(cut --fields=1 $retmp | tr "\n" " "))
        else
-        repat_tmp=($(grep --perl-regexp '^'"$enz_name"'[\t;]|;'"$enz_name"'[\t;]' $retmp | tr "\t" " "))
+        repat_tmp=($(grep --ignore-case --perl-regexp '^'"$enz_name"'[\t;]|;'"$enz_name"'[\t;]' $retmp | tr "\t" " "))
         reheads=${repat_tmp[0]}
         repat=${repat_tmp[1]}
         local repat_min=0
@@ -468,11 +468,11 @@ arg=$1
        if [ ! -z ${verbose+x} ]; then echo "Downloading restriction enzyme recognition sites" >> $(readlink /proc/$$/fd/2); fi
        wget --quiet --show-progress --output-document=- ftp://ftp.neb.com/pub/rebase/withref.txt |
        grep --perl-regexp "\<1\>|\<5\>" |
-       tr -d "\n" |
+       tr --delete "\n" |
        sed --regexp-extended 's/<1>/\n/g; s/<5>/\t/g' |
        grep --invert-match "?" |
        tee $reheads |
-       cut -f2 |
+       cut --fields=2 |
        sed --regexp-extended \
        's/[?/\^()]//g;
        s/[0-9]//g;
@@ -491,24 +491,28 @@ arg=$1
        s/v/[acg]/gi' |
        grep --perl-regexp --invert-match "^$" > $repat
        paste <(cut --fields=1 $reheads | grep --perl-regexp --invert-match "^$") $repat |
-       sort -k2,2 | uniq -f1 --group="both" > $retmp
-       paste <(cut --fields=1 $retmp | tr "\n" ";" | sed -E 's/;;/\n/g; s/^;//g') <(cut --fields=2 $retmp | grep -v "^$" | uniq) > $repat
+       sort --key=2,2 | uniq --skip-fields=1 --group="both" > $retmp
+       paste <(cut --fields=1 $retmp | tr "\n" ";" | sed --regexp-extended 's/;;/\n/g; s/^;//g') <(cut --fields=2 $retmp | grep -v "^$" | uniq) > $repat
        rm --force $reheads $retmp
        retmp=$repat
+       fi
+       
+       # Create search arrays
        if [[ $repat_min =~ $num ]]
        then
         repat=($(cut --fields=2 $retmp | tr "\n" " "))
         reheads=($(cut --fields=1 $retmp | tr "\n" " "))        
        else
-        repat_tmp=($(grep --perl-regexp '^'"$enz_name"'[\t;]|;'"$enz_name"'[\t;]' $retmp | tr "\t" " "))
+        repat_tmp=($(grep --ignore-case --perl-regexp '^'"$enz_name"'[\t;]|;'"$enz_name"'[\t;]' $retmp | tr "\t" " "))
         reheads=${repat_tmp[0]}
         repat=${repat_tmp[1]}	
         local repat_min=0
         local repat_max=0
        fi
-       rm --force $retmp
-      fi
-      
+       if [ ! -f $(echo $(dirname $(readlink --canonicalize $(which fastakit)))"/neb_rebase") ]
+       then
+        rm --force $retmp
+       fi
       # Loop over all restriction enzymes
 
        for ((re=0; re <= $((${#repat[@]} - 1)); re++))
@@ -536,17 +540,17 @@ arg=$1
      function random(){
      if [[ $MOLECULE = "DNA" ]]
       then
-       paste <(cut --fields=1 $1) <(cut --fields=2 $1 | awk -F $'\t' '{print system("tr -dc ATGC < /dev/urandom | head -c "length($0))}' |
-      tr -d 0)
+       paste <(cut --fields=1 $1) <(cut --fields=2 $1 | awk -F $'\t' '{print system("tr --delete --complement ATGC < /dev/urandom | head --bytes="length($0))}' |
+      tr --delete 0)
       elif [[ $MOLECULE = "RNA" ]]
       then
-       paste <(cut --fields=1 $1) <(cut --fields=2 $1 | awk -F $'\t' '{print system("tr -dc AUCG < /dev/urandom | head -c "length($0))}' |
-      tr -d 0)
+       paste <(cut --fields=1 $1) <(cut --fields=2 $1 | awk -F $'\t' '{print system("tr --delete --complement AUCG < /dev/urandom | head --bytes="length($0))}' |
+      tr --delete 0)
       elif [[ $MOLECULE = "PROTEIN" ]]
       then
       paste <(cut --fields=1 $1) <(cut --fields=2 $1 | tr -d "*" |
-      awk -F $'\t' '{print system("tr -dc ARNCEQGHILKMFPSTWYV < /dev/urandom | head -c "length($0))}' |
-      tr -d 0)
+      awk -F $'\t' '{print system("tr --delete --complement ARNCEQGHILKMFPSTWYV < /dev/urandom | head --bytes="length($0))}' |
+      tr --delete 0)
       else
        echo "Invalid molucule type!" >> $(readlink /proc/$$/fd/2)
        exit 1
@@ -722,7 +726,7 @@ arg=$1
     if [ ! -z ${nonnuc+x} ]
     then
      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
-     paste <(cat $HEADERS | tr -d ">") <(cat $INFILE | tr -d "ACTGUactgu" | awk '{print length($0)}') |
+     paste <(cat $HEADERS | tr --delete ">") <(cat $INFILE | tr --delete "ACTGUactgu" | awk '{print length($0)}') |
      grep --invert-match --perl-regexp "\t0"
      if [ ! -z ${verbose+x} ]
       then
@@ -753,7 +757,7 @@ arg=$1
      echo -e "Median\t"$(awk -v num_seq=$num_seq -v half_num=$half_num \
      'NR==int(num_seq/2){if(num_seq/2 == int(num_seq/2)) printf "%.1f", ($0+half_num)/2; else printf "%.0f", $0}' $lengths) >> $(readlink /proc/$$/fd/2)
      echo -e "Mean\t"$(bc <<< "scale=2; $total/$num_seq") >> $(readlink /proc/$$/fd/2)
-     echo -e "GC%\t"$(bc <<< "scale=2; $(cat $OUTFILE | tr -d "\n" | tr -d "[AaTtUu]" | wc -m)*100/$(cat $OUTFILE | tr -d "\n" | wc -m)") \
+     echo -e "GC%\t"$(bc <<< "scale=2; $(cat $OUTFILE | tr --delete "[AaTtUu]\n" | wc -m)*100/$(cat $OUTFILE | tr --delete "\n" | wc -m)") \
      >> $(readlink /proc/$$/fd/2)
      echo -e "L50\t"$(awk -v l50_idx=$l50_idx 'NR==l50_idx{printf "%.0f", $0}' $lengths) >> $(readlink /proc/$$/fd/2)
      echo -e "N50\t"$l50_idx >> $(readlink /proc/$$/fd/2)
@@ -959,7 +963,7 @@ arg=$1
       if [ ! -z ${translate+x} ] && [ -z ${min_max_seq_length+x} ]
       then
        translate - |
-       tr -d " [:lower:]" |
+       tr --delete " [:lower:]" |
        if [ ! -z ${min_prot+x} ]
        then
         awk -v min_prot_length="$min_prot_length" '{if(match($0,"*|$") - 1 >= min_prot_length) print $0;
@@ -968,7 +972,7 @@ arg=$1
         cat
        fi
       else
-       tr -d " "
+       tr --delete " "
       fi > $ORFFILE2
       awk -F $'\t' -v orf_num="$orf_num" '{print $0"_orf"orf_num}' $ORFHEADERS > $ORFHEADERS2
       SWITCH=$ORFFILE1; ORFFILE1=$ORFFILE3; ORFFILE3=$SWITCH
@@ -1006,7 +1010,7 @@ arg=$1
        if [ ! -z ${translate+x} ] && [ -z ${min_max_seq_length+x} ]
        then
         translate - |
-        tr -d " [:lower:]" |
+        tr --delete " [:lower:]" |
         if [ ! -z ${min_prot+x} ]
         then
          awk -v min_prot_length="$min_prot_length" '{if(match($0,"*|$") - 1 >= min_prot_length) print $0;
@@ -1015,7 +1019,7 @@ arg=$1
          cat
         fi
        else
-        tr -d " "
+        tr --delete " "
        fi >> $ORFFILE2
        awk -F $'\t' -v orf_num="$orf_num" '{print $0"_orf"orf_num}' $ORFHEADERS >> $ORFHEADERS2
        SWITCH=$ORFFILE1; ORFFILE1=$ORFFILE3; ORFFILE3=$SWITCH
@@ -1139,7 +1143,7 @@ arg=$1
      fi
      awk -F '' '{for(i=1; i<=NF; i+=3) {printf "%s%s ", $i,$(i+1)$(i+2);}; print ""}' $INFILE |
       translate - |
-       tr -d " [:lower:]" |
+       tr --delete " [:lower:]" |
        
        # remove if less than cutoff
        if [ ! -z ${min_prot+x} ]
@@ -1179,7 +1183,7 @@ arg=$1
      if [ ! -z ${unique+x} ]
      then
       SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
-      sort --ignore-case --parallel="$threads" --unique --key=2 $INFILE > $OUTFILE
+      sort --ignore-case --parallel="$threads" --unique --key=2,2 $INFILE > $OUTFILE
       if [ ! -z ${verbose+x} ]
       then
        echo -n "Remove duplicates done: " >> $(readlink /proc/$$/fd/2)
@@ -1262,7 +1266,7 @@ arg=$1
       echo "Percent GC" >> $(readlink /proc/$$/fd/2)
      fi
      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
-      paste <(cut --fields=1 $INFILE | tr -d ">") <(cut --fields=2 $INFILE | awk '{var=length($0);gsub("[AaTt]","",$0);print length($0)/var*100}')
+      paste <(cut --fields=1 $INFILE | tr --delete ">") <(cut --fields=2 $INFILE | awk '{var=length($0);gsub("[AaTt]","",$0);print length($0)/var*100}')
       if [ ! -z ${verbose+x} ]
       then
        echo -n "GC fraction done: " >> $(readlink /proc/$$/fd/2)
@@ -1280,10 +1284,10 @@ arg=$1
      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
      if [[ $MOLECULE == "DNA" ]] || [[ $MOLECULE = "RNA" ]]
      then
-      paste <(cut --fields=1 $INFILE | tr -d ">") <(cut --fields=2 $INFILE | calc_MW 1 -) <(cut --fields=2 $INFILE | calc_MW 2 -)
+      paste <(cut --fields=1 $INFILE | tr --delete ">") <(cut --fields=2 $INFILE | calc_MW 1 -) <(cut --fields=2 $INFILE | calc_MW 2 -)
      elif [[ $MOLECULE == "PROTEIN" ]]
      then
-      paste <(cut --fields=1 $INFILE | tr -d ">") <(cut --fields=2 $INFILE | calc_MW 1)
+      paste <(cut --fields=1 $INFILE | tr --delete ">") <(cut --fields=2 $INFILE | calc_MW 1)
      else
       echo "Error detecting molecule" >> $(readlink /proc/$$/fd/2)
       exit 1
@@ -1303,7 +1307,7 @@ arg=$1
      then
      if [ ! -z ${verbose+x} ]; then echo "Detecting restriction sites" >> $(readlink /proc/$$/fd/2); fi
       SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
-      paste <(cut --fields=1 $INFILE | tr -d ">") \
+      paste <(cut --fields=1 $INFILE | tr --delete ">") \
       <(res_enz $INFILE ${min_max_re[0]=0} ${min_max_re[1]=0} ${min_max_re[2]=0} ${min_max_re[3]=0} ${min_max_re[4]=0}) |
       grep --perl-regexp --invert-match "\t$"
       if [ ! -z ${verbose+x} ]
