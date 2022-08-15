@@ -163,8 +163,12 @@ arg=$1
   --min_max_seq)
   OFS=$IFS
   IFS=","
-  IFS="," min_max_seq_length=($(echo "$2")) # Minimum/Maximum nucleotide sequence size
+  min_max_seq_length=($(echo "$2")) # Minimum/Maximum nucleotide sequence size
   IFS=$OFS
+  if [ ${min_max_seq_length[0]} -eq 0 ] && [ ${min_max_seq_length[1]} -eq 0 ]
+  then
+   unset min_max_seq_length
+  fi
   shift 2
   ;;
   -t | --threads)
@@ -947,7 +951,7 @@ arg=$1
       if [ -z ${ignorestart+x} ]
        then
         awk -F $'\t' '{IGNORECASE = 1; if(match($0,"a[tu]g") > 0) print substr($0,match($0,"a[tu]g"));
-       if(match($0,"a[tu]g") == 0) print ""}'
+       else print ""}'
        else
         cat -
        fi |
@@ -955,31 +959,57 @@ arg=$1
       if [ ! -z ${fullprot+x} ]
       then
        awk -F $'\t' '{IGNORECASE = 1; if(match($0,"[tu]a[ag]|[tu]ga") > 0) print substr($0,1,match($0,"[tu]a[ag]|[tu]ga")+2);
-      if(match($0,"[tu]a[ag]|[tu]ga") == 0) print ""}'
+      else print ""}'
       else
        awk -F $'\t' '{IGNORECASE = 1; if(match($0,"[tu]a[ag]|[tu]ga") > 0) print substr($0,1,match($0,"[tu]a[ag]|[tu]ga")+2);
-      if(match($0,"[tu]a[ag]|[tu]ga") == 0) print $0}'
+      else print $0}'
       fi |
-      if [ ! -z ${translate+x} ] && [ -z ${min_max_seq_length+x} ]
+      if [ ! -z ${translate+x} ]
       then
        translate - |
        tr --delete " [:lower:]" |
        if [ ! -z ${min_prot+x} ]
        then
         awk -v min_prot_length="$min_prot_length" '{if(match($0,"*|$") - 1 >= min_prot_length) print $0;
-        if(match($0,"*|$") - 1 < min_prot_length) print ""}'
+        else print ""}'
        else
         cat
        fi
+      elif [ ! -z ${min_max_seq_length+x} ]
+      then
+      if [ ${min_max_seq_length[1]} -eq 0 ]
+      then
+       tr --delete " " |
+       awk -v min_seq_length="${min_max_seq_length[0]}" '{if(length($0) - 1 >= min_seq_length) print $0;
+       else print ""}'
+      else
+       tr --delete " " |
+       awk -v min_seq_length="${min_max_seq_length[0]}" -v max_seq_length="${min_max_seq_length[1]}" \
+       '{if(length($0) - 1 >= min_seq_length && length($0) - 1 <= max_seq_length) print $0;
+       else print ""}'
+      fi
       else
        tr --delete " "
       fi > $ORFFILE2
       awk -F $'\t' -v orf_num="$orf_num" '{print $0"_orf"orf_num}' $ORFHEADERS > $ORFHEADERS2
+      
       SWITCH=$ORFFILE1; ORFFILE1=$ORFFILE3; ORFFILE3=$SWITCH
+      if [ ! -z ${verbose+x} ] && [ $orf_core -eq 0 ]
+      then
+       orf_count=$(cat $ORFFILE1 | wc -m)
+       orf_progress=0
+       echo -en $orf_progress"%\r" >> $(readlink /proc/$$/fd/2)
+      fi
 
       # Loop over other ORFs
       while [ $(grep --ignore-case --perl-regexp --count "a[tu]g" $ORFFILE1) -ne 0 ]
       do
+      if [ ! -z ${verbose+x} ] && [ $orf_core -eq 0 ] && [ $((100 * ($orf_count - $(cat $ORFFILE1 | wc -m)) / $orf_count)) -gt $orf_progress ]
+      then
+       orf_progress=$((100 * ($orf_count - $(cat $ORFFILE1 | wc -m)) / $orf_count))
+       echo -en $orf_progress"%\r" >> $(readlink /proc/$$/fd/2)
+      fi
+      
       ((orf_num++))
       if [ $threads -gt 0 ] && [ ! -z ${max_orf_num+x} ] && [ $orf_num -gt $max_orf_num ]
       then
@@ -990,11 +1020,11 @@ arg=$1
        
        # Cut until first start and stop codon or until end of line
        awk -F $'\t' '{IGNORECASE = 1; if(match($0,"[tu]a[ag]|[tu]ga") > 0) print substr($0,match($0,"[tu]a[ag]|[tu]ga")+4);
-       if(match($0,"[tu]a[ag]|[tu]ga") == 0) print ""}' $ORFFILE1 |
+       else print ""}' $ORFFILE1 |
        if [ -z ${ignorestart+x} ]
        then
         awk -F $'\t' '{IGNORECASE = 1; if(match($0,"a[tu]g") > 0) print substr($0,match($0,"a[tu]g"));
-       if(match($0,"a[tu]g") == 0) print ""}'
+       else print ""}'
        else
         cat -
        fi |
@@ -1002,29 +1032,46 @@ arg=$1
        if [ ! -z ${fullprot+x} ]
       then
        awk -F $'\t' '{IGNORECASE = 1; if(match($0,"[tu]a[ag]|[tu]ga") > 0) print substr($0,1,match($0,"[tu]a[ag]|[tu]ga")+2);
-      if(match($0,"[tu]a[ag]|[tu]ga") == 0) print ""}'
+      else print ""}'
       else
        awk -F $'\t' '{IGNORECASE = 1; if(match($0,"[tu]a[ag]|[tu]ga") > 0) print substr($0,1,match($0,"[tu]a[ag]|[tu]ga")+2);
-      if(match($0,"[tu]a[ag]|[tu]ga") == 0) print $0}'
+      else print $0}'
       fi |
-       if [ ! -z ${translate+x} ] && [ -z ${min_max_seq_length+x} ]
+       if [ ! -z ${translate+x} ]
        then
         translate - |
         tr --delete " [:lower:]" |
         if [ ! -z ${min_prot+x} ]
         then
          awk -v min_prot_length="$min_prot_length" '{if(match($0,"*|$") - 1 >= min_prot_length) print $0;
-         if(match($0,"*|$") - 1 < min_prot_length) print ""}'
+         else print ""}'
         else
          cat
         fi
+       elif [ ! -z ${min_max_seq_length+x} ]
+      then
+      if [ ${min_max_seq_length[1]} -eq 0 ]
+      then
+       tr --delete " " |
+       awk -v min_seq_length="${min_max_seq_length[0]}" '{if(length($0) - 1 >= min_seq_length) print $0;
+       else print ""}'
+      else
+       tr --delete " " |
+       awk -v min_seq_length="${min_max_seq_length[0]}" -v max_seq_length="${min_max_seq_length[1]}" \
+       '{if(length($0) - 1 >= min_seq_length && length($0) - 1 <= max_seq_length) print $0;
+       else print ""}'
+      fi
        else
         tr --delete " "
        fi >> $ORFFILE2
        awk -F $'\t' -v orf_num="$orf_num" '{print $0"_orf"orf_num}' $ORFHEADERS >> $ORFHEADERS2
        SWITCH=$ORFFILE1; ORFFILE1=$ORFFILE3; ORFFILE3=$SWITCH
-       
       done
+      
+      if [ ! -z ${verbose+x} ] && [ $orf_core -eq 0 ]
+      then
+       echo "100%" >> $(readlink /proc/$$/fd/2)
+      fi
       
       cat $ORFHEADERS2 > HEADCORE$orf_core
       cat $ORFFILE2 > OUTCORE$orf_core
@@ -1108,9 +1155,7 @@ arg=$1
     fi
     
     # Minimum/Maximum length (nucleotie)
-     if [ ! -z ${min_max_seq_length+x} ]
-     then
-     if [ ${min_max_seq_length[0]} -gt 0 ] || [ ${min_max_seq_length[1]} -gt 0 ]
+     if [ ! -z ${min_max_seq_length+x} ] && [ -z ${orf+x} ]
      then
      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
      if [ ${min_max_seq_length[1]} -eq 0 ]
@@ -1123,10 +1168,9 @@ arg=$1
       else print ""}' $INFILE > $OUTFILE
      fi
      fi
-     fi
      
     # Separate to codons and translate
-    if [ ! -z ${translate+x} ] && ( [ -z ${orf+x} ] || [ ! -z ${min_max_seq_length+x} ] )
+    if [ ! -z ${translate+x} ] && [ -z ${orf+x} ]
     then
      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
      if [ ! -z ${verbose+x} ]
@@ -1149,7 +1193,7 @@ arg=$1
        if [ ! -z ${min_prot+x} ]
        then
         awk -v min_prot_length="$min_prot_length" '{if(match($0,"*|$") - 1 >= min_prot_length) print $0;
-        if(match($0,"*|$") - 1 < min_prot_length) print ""}'
+        else print ""}'
        else
         cat
        fi > $OUTFILE
@@ -1163,9 +1207,9 @@ arg=$1
     
      # Combine headers and sequences
      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
-     detect_mol $INFILE
      paste $HEADERS $INFILE |
      grep --perl-regexp --invert-match "\t$" > $OUTFILE
+     detect_mol <(cut --field=2 $OUTFILE)
      
      # Get maxseq number of largest sequences from each input sequence
      if [ ! -z ${maxseq+x} ]
