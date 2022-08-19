@@ -30,6 +30,7 @@ fastakit [OPTIONS] [Sequence.fasta | stdin]
 	--maxseq Return the # of largest sequences for each input sequence (ORFs, proteins, etc.)
 	--check	Check if FASTA file is single line
 	--fullprot	Return only ORFs/proteins with start and stop codons
+	--detect	Detect molucule and exit
 	--re #,#,#,#	Detect restriction enzyme recognition sites (Restriction enzyme name, min_length, max_length, min_sites, max_sites; 0 to ignore)
 	--ignorestart	Ignore start codon when getting ORFs
 	-t | --threads #	Number of CPU threads to use (Default = Detected processors or 1)

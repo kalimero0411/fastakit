@@ -38,6 +38,7 @@ fastakit [OPTIONS] [Sequence.fasta | stdin]
 	--maxseq Return the # of largest sequences for each input sequence (ORFs, proteins, etc.)
 	--check	Check if FASTA file is single line
 	--fullprot	Return only ORFs/proteins with start and stop codons
+	--detect	Detect molucule and exit
 	--re #,#,#,#	Detect restriction enzyme recognition sites (Restriction enzyme name, min_length, max_length, min_number, max_number; 0 to ignore)
 	--ignorestart	Ignore start codon when getting ORFs
 	-t | --threads #	Number of CPU threads to use (Default = Detected processors or 1)
@@ -152,6 +153,10 @@ arg=$1
   ;;
   --check)
   check_sl=1
+  shift
+  ;;
+  --detect)
+  detect=1
   shift
   ;;
   --min_prot)
@@ -421,20 +426,21 @@ arg=$1
      }
      
      function detect_mol(){
-     local input=$1
-     if $(head -5 $input | awk '{seq=length($0); gsub("[actguACTGU]","",$0)}; length($0)/seq > 0.25{exit 1}')
+     local input=$(mktemp)
+     head --bytes=5000000 $1 > $input
+     if $(awk '{seq=length($0); gsub("[actguACTGU]","",$0)}; length($0)/seq > 0.25{exit 1}' $input)
      then
-      MOL=$(mktemp)
+      export MOL=$(mktemp)
       export input
-      export MOL
       parallel -j2 --halt now,success=1 ::: \
       'grep --ignore-case --max-count=1 "T" $input > /dev/null && echo "DNA" > $MOL' \
       'grep --ignore-case --max-count=1 "U" $input > /dev/null && echo "RNA" > $MOL' &> /dev/null
       MOLECULE=$(cat $MOL)
+      rm --force $MOL
      else
       MOLECULE="PROTEIN"
      fi
-     rm --force $MOL
+     if [ ! -z ${detect+x} ]; then echo $MOLECULE; fi
      if [ ! -z ${verbose+x} ]; then echo "Detected molecule: "$MOLECULE >> $(readlink /proc/$$/fd/2); fi
      }
      
@@ -599,6 +605,13 @@ arg=$1
      stdin=1
      FILE=$(mktemp)
      cat /dev/stdin > $FILE
+    fi
+    
+    # Detect molecule and exit
+    if [ ! -z ${detect+x} ]
+    then
+     detect_mol <(grep --perl-regexp --invert-match "^>" $FILE)
+     exit 0
     fi
 
     HEADERS=$(mktemp)
@@ -930,11 +943,11 @@ arg=$1
      local ORFstart=$1
      local ORFend=$2
      local orf_core=$3
+     local headcore_orf=HEADCORE$orf_core
+     local outcore_orf=OUTCORE$orf_core 
      local ORFHEADERS=$(mktemp)
      local ORFFILE1=$(mktemp)
      local ORFFILE2=$(mktemp)
-     local ORFFILE3=$(mktemp)
-     local ORFHEADERS2=$(mktemp)
      
      if [[ $threads != 1 ]]
      then
@@ -955,7 +968,7 @@ arg=$1
        else
         cat -
        fi |
-      tee $ORFFILE3 |
+      tee $ORFFILE2 |
       if [ ! -z ${fullprot+x} ]
       then
        awk -F $'\t' '{IGNORECASE = 1; if(match($0,"[tu]a[ag]|[tu]ga") > 0) print substr($0,1,match($0,"[tu]a[ag]|[tu]ga")+2);
@@ -990,10 +1003,10 @@ arg=$1
       fi
       else
        tr --delete " "
-      fi > $ORFFILE2
-      awk -F $'\t' -v orf_num="$orf_num" '{print $0"_orf"orf_num}' $ORFHEADERS > $ORFHEADERS2
+      fi > ${!outcore_orf}
+      awk -F $'\t' -v orf_num="$orf_num" '{print $0"_orf"orf_num}' $ORFHEADERS > ${!headcore_orf}
       
-      SWITCH=$ORFFILE1; ORFFILE1=$ORFFILE3; ORFFILE3=$SWITCH
+      SWITCH=$ORFFILE1; ORFFILE1=$ORFFILE2; ORFFILE2=$SWITCH
       if [ ! -z ${verbose+x} ] && [ $orf_core -eq 0 ]
       then
        orf_count=$(cat $ORFFILE1 | wc -m)
@@ -1016,7 +1029,7 @@ arg=$1
        break
       fi
       
-       : > $ORFFILE3
+       : > $ORFFILE2
        
        # Cut until first start and stop codon or until end of line
        awk -F $'\t' '{IGNORECASE = 1; if(match($0,"[tu]a[ag]|[tu]ga") > 0) print substr($0,match($0,"[tu]a[ag]|[tu]ga")+4);
@@ -1028,7 +1041,7 @@ arg=$1
        else
         cat -
        fi |
-       tee $ORFFILE3 |
+       tee $ORFFILE2 |
        if [ ! -z ${fullprot+x} ]
       then
        awk -F $'\t' '{IGNORECASE = 1; if(match($0,"[tu]a[ag]|[tu]ga") > 0) print substr($0,1,match($0,"[tu]a[ag]|[tu]ga")+2);
@@ -1063,9 +1076,9 @@ arg=$1
       fi
        else
         tr --delete " "
-       fi >> $ORFFILE2
-       awk -F $'\t' -v orf_num="$orf_num" '{print $0"_orf"orf_num}' $ORFHEADERS >> $ORFHEADERS2
-       SWITCH=$ORFFILE1; ORFFILE1=$ORFFILE3; ORFFILE3=$SWITCH
+       fi >> ${!outcore_orf}
+       awk -F $'\t' -v orf_num="$orf_num" '{print $0"_orf"orf_num}' $ORFHEADERS >> ${!headcore_orf}
+       SWITCH=$ORFFILE1; ORFFILE1=$ORFFILE2; ORFFILE2=$SWITCH
       done
       
       if [ ! -z ${verbose+x} ] && [ $orf_core -eq 0 ]
@@ -1073,11 +1086,8 @@ arg=$1
        echo "100%" >> $(readlink /proc/$$/fd/2)
       fi
       
-      cat $ORFHEADERS2 > HEADCORE$orf_core
-      cat $ORFFILE2 > OUTCORE$orf_core
-      
       # Cleanup
-      rm --force $ORFFILE1 $ORFFILE2 $ORFFILE3 $ORFHEADERS $ORFHEADERS2
+      rm --force $ORFFILE1 $ORFFILE2 $ORFHEADERS
      }
      
      # Set Minimum protein length if minimum nucleotide size is set
@@ -1132,9 +1142,11 @@ arg=$1
       done
       for ((core=0;core <= $(($threads - 1));core++))
       do
-       cat OUTCORE$core >> $OUTFILE
-       cat HEADCORE$core >> $HEADERS_TMP
-       rm --force OUTCORE$core HEADCORE$core
+       headcore_tmp=HEADCORE$core
+       outcore_tmp=OUTCORE$core
+       cat ${!headcore_tmp} >> $HEADERS_TMP
+       cat ${!outcore_tmp} >> $OUTFILE
+       rm --force ${!headcore_tmp} ${!outcore_tmp}
       done
      
      rm --force $HEADERS
