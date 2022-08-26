@@ -29,10 +29,10 @@ fastakit [OPTIONS] [Sequence.fasta | stdin]
 	--min_max_seq #,#	Minimum/Maximum sequence size (e.g. 10,50 ; 0 to ignore)
 	--maxseq Return the # of largest sequences for each input sequence (ORFs, proteins, etc.)
 	--check	Check if FASTA file is single line
-	--fullprot	Return only ORFs/proteins with start and stop codons
+	--fullorf	Return only ORFs/proteins with start and stop codons
+	--makebed	Create BED output for ORFs (Assumes --orf and --fullorf)
 	--detect	Detect molucule and exit
 	--re #,#,#,#	Detect restriction enzyme recognition sites (Restriction enzyme name, min_length, max_length, min_sites, max_sites; 0 to ignore)
-	--ignorestart	Ignore start codon when getting ORFs
 	-t | --threads #	Number of CPU threads to use (Default = Detected processors or 1)
 	-v | --verbose	Verbose
 	-h | --help	Display help
@@ -61,3 +61,4 @@ fastakit [OPTIONS] [Sequence.fasta | stdin]
 	minimum and maximum length of recognition site, and minimum and maximum number of detected sites; seperated by a comma (e.g. HpaII,0,0,1,2). Each parametercaan be ignored with 0.
 - If `--re` is given a restriction enzyme name (i.e. not 0), the restrictions for recognition site length are removed.
 - The `--random` option applies after all other sequence manipulation processes.
+- The `--makebed` option enables `--orf` and `--fullorf`, and disables `--translate` and `--min_prot`, by default. Works with `--min_max_seq` and `--maxseq`.

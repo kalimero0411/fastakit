@@ -37,10 +37,10 @@ fastakit [OPTIONS] [Sequence.fasta | stdin]
 	--min_max_seq #,#	Minimum/Maximum sequence size (e.g. 10,50 ; 0 to ignore)
 	--maxseq Return the # of largest sequences for each input sequence (ORFs, proteins, etc.)
 	--check	Check if FASTA file is single line
-	--fullprot	Return only ORFs/proteins with start and stop codons
+	--fullorf	Return only ORFs with start and stop codons
+	--makebed	Create BED output for ORFs (Assumes --orf and --fullorf)
 	--detect	Detect molucule and exit
 	--re #,#,#,#	Detect restriction enzyme recognition sites (Restriction enzyme name, min_length, max_length, min_number, max_number; 0 to ignore)
-	--ignorestart	Ignore start codon when getting ORFs
 	-t | --threads #	Number of CPU threads to use (Default = Detected processors or 1)
 	-v | --verbose	Verbose
 	-h | --help	Display help
@@ -189,12 +189,14 @@ arg=$1
   multi_length=$2
   shift 2
   ;;
-  --fullprot)
-  fullprot=1
+  --makebed)
+  makebed=$(mktemp)
+  orf=1
+  fullorf=1
   shift
   ;;
-  --ignorestart)
-  ignorestart=1
+  --fullorf)
+  fullorf=1
   shift
   ;;
   --mw)
@@ -442,6 +444,7 @@ arg=$1
      fi
      if [ ! -z ${detect+x} ]; then echo $MOLECULE; fi
      if [ ! -z ${verbose+x} ]; then echo "Detected molecule: "$MOLECULE >> $(readlink /proc/$$/fd/2); fi
+     rm --force $input
      }
      
      function res_enz(){
@@ -577,6 +580,13 @@ arg=$1
    exit 1
   fi
   done
+  
+  # maxseq exception
+  if [ ! -z ${maxseq+x} ] && [ ! $maxseq -gt 0 ] 
+  then
+   echo "Error: maxseq must be greater than 0" >> $(readlink /proc/$$/fd/2)
+   exit 1
+  fi
 
   # Set six-frame array variable
   if [ $frame -eq 0 ]
@@ -595,6 +605,13 @@ arg=$1
   if [ ! -z ${percent_GC+x} ]
   then
    unset translate
+  fi
+  
+  if [ ! -z ${makebed+x} ]
+  then
+   unset translate
+   translate_table=1
+   unset min_prot
   fi
   
     # Get input files
@@ -915,25 +932,19 @@ arg=$1
      HEADERS=$ADD_headers
      OUTFILE=$ADD_frame
      fi
+     
+     # Verbose sequence cutoffs
+     if [ ! -z ${verbose+x} ] && [ ! -z $min_max_seq_length ]; then echo "Extracting "${min_max_seq_length[0]}" < sequence(s) < "${min_max_seq_length[1]} >> $(readlink /proc/$$/fd/2); fi
+     if [ ! -z ${verbose+x} ] && [ ! -z $maxseq ]; then echo "Extracting "$maxseq" longest sequence(s) for each input sequence" >> $(readlink /proc/$$/fd/2); fi
 
+     # ORF finding
      if [ ! -z ${orf+x} ]
      then
-     if [ ! -z ${verbose+x} ] && [ ! -z ${orf+x} ]
-     then
-      echo "ORF | frame(s) "${frame[@]} >> $(readlink /proc/$$/fd/2)
-     fi
-     if [ ! -z ${verbose+x} ] && [ ! -z ${translate+x} ]
-     then
-      echo "Translate | frame(s) "${frame[@]} >> $(readlink /proc/$$/fd/2)
-     fi
-     if [ ! -z ${verbose+x} ] && [ $translate_table -ne 1 ]
-     then
-      echo "Translation code: "$translate_table >> $(readlink /proc/$$/fd/2)
-     fi
-     if [ ! -z ${verbose+x} ] && [ ! -z ${min_prot+x} ]
-     then
-      echo "Minimum protein length: "$min_prot_length >> $(readlink /proc/$$/fd/2)
-     fi
+     if [ ! -z ${verbose+x} ]; then echo "ORF | frame(s) "${frame[@]} >> $(readlink /proc/$$/fd/2); fi
+     if [ ! -z ${translate+x} ] && [ ! -z ${verbose+x} ]; then echo "Translate | frame(s) "${frame[@]} >> $(readlink /proc/$$/fd/2); fi
+     if [ $translate_table -ne 1 ] && [ ! -z ${verbose+x} ]; then echo "Translation code: "$translate_table >> $(readlink /proc/$$/fd/2); fi
+     if [ ! -z ${min_prot+x} ] && [ ! -z ${verbose+x} ]; then echo "Minimum protein length: "$min_prot_length >> $(readlink /proc/$$/fd/2); fi
+     if [ ! -z ${makebed+x} ] && [ ! -z ${verbose+x} ]; then echo "Output in BED format" >> $(readlink /proc/$$/fd/2); fi
      
      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
      
@@ -944,7 +955,21 @@ arg=$1
      local ORFend=$2
      local orf_core=$3
      local headcore_orf=HEADCORE$orf_core
-     local outcore_orf=OUTCORE$orf_core 
+     if [ ! -z ${makebed+x} ]
+     then
+      local makebed_orf=makebed$orf_core
+      local makebed_start=$(mktemp)
+      local makebed_end=$(mktemp)
+      local seq_length_orf=$(mktemp)
+      if [[ $threads != 1 ]]
+      then
+       sed --quiet ''"$ORFstart"','"$ORFend"'p;'"$(($ORFend + 1))"'q' $6 > $seq_length_orf
+      else
+       cp --force $6 $seq_length_orf
+      fi
+     else
+      local outcore_orf=OUTCORE$orf_core
+     fi
      local ORFHEADERS=$(mktemp)
      local ORFFILE1=$(mktemp)
      local ORFFILE2=$(mktemp)
@@ -954,22 +979,31 @@ arg=$1
       sed --quiet ''"$ORFstart"','"$ORFend"'p;'"$(($ORFend + 1))"'q' $4 > $ORFFILE1
       sed --quiet ''"$ORFstart"','"$ORFend"'p;'"$(($ORFend + 1))"'q' $5 > $ORFHEADERS
      else
-      cp -f $4 $ORFFILE1
-      cp -f $5 $ORFHEADERS
+      cp --force $4 $ORFFILE1
+      cp --force $5 $ORFHEADERS
      fi
      
       # Separate codons and cut to first start and stop codon
       local orf_num=1
       awk -F '' '{for(i=1; i<=NF; i+=3) {printf "%s%s ", $i,$(i+1)$(i+2);}; print ""}' $ORFFILE1 |
-      if [ -z ${ignorestart+x} ]
+      if [ ! -z ${makebed+x} ]
        then
-        awk -F $'\t' '{IGNORECASE = 1; if(match($0,"a[tu]g") > 0) print substr($0,match($0,"a[tu]g"));
-       else print ""}'
+        tee >(awk -F $'\t' '{IGNORECASE = 1; gsub("a[tu]g","X",$0); gsub(" ","",$0); if(match($0,"X") > 0) print match($0,"X");
+       else print ""}' > $makebed_start)
        else
         cat -
        fi |
+       awk -F $'\t' '{IGNORECASE = 1; if(match($0,"a[tu]g") > 0) print substr($0,match($0,"a[tu]g"));
+       else print ""}' |
       tee $ORFFILE2 |
-      if [ ! -z ${fullprot+x} ]
+      if [ ! -z ${makebed+x} ]
+      then
+        tee >(awk -F $'\t' '{IGNORECASE = 1; gsub("[tu]a[ag]|[tu]ga","X",$0); gsub(" ","",$0); if(match($0,"X") > 0) print match($0,"X") + 2;
+        else print ""}' > $makebed_end)
+       else
+        cat -
+       fi |
+      if [ ! -z ${fullorf+x} ]
       then
        awk -F $'\t' '{IGNORECASE = 1; if(match($0,"[tu]a[ag]|[tu]ga") > 0) print substr($0,1,match($0,"[tu]a[ag]|[tu]ga")+2);
       else print ""}'
@@ -977,6 +1011,8 @@ arg=$1
        awk -F $'\t' '{IGNORECASE = 1; if(match($0,"[tu]a[ag]|[tu]ga") > 0) print substr($0,1,match($0,"[tu]a[ag]|[tu]ga")+2);
       else print $0}'
       fi |
+      if [ -z ${makebed+x} ]
+      then
       if [ ! -z ${translate+x} ]
       then
        translate - |
@@ -1004,7 +1040,12 @@ arg=$1
       else
        tr --delete " "
       fi > ${!outcore_orf}
+      fi
       awk -F $'\t' -v orf_num="$orf_num" '{print $0"_orf"orf_num}' $ORFHEADERS > ${!headcore_orf}
+      if [ ! -z ${makebed+x} ]
+      then
+       paste $seq_length_orf $makebed_start $makebed_end > ${!makebed_orf}
+      fi
       
       SWITCH=$ORFFILE1; ORFFILE1=$ORFFILE2; ORFFILE2=$SWITCH
       if [ ! -z ${verbose+x} ] && [ $orf_core -eq 0 ]
@@ -1034,15 +1075,24 @@ arg=$1
        # Cut until first start and stop codon or until end of line
        awk -F $'\t' '{IGNORECASE = 1; if(match($0,"[tu]a[ag]|[tu]ga") > 0) print substr($0,match($0,"[tu]a[ag]|[tu]ga")+4);
        else print ""}' $ORFFILE1 |
-       if [ -z ${ignorestart+x} ]
+       if [ ! -z ${makebed+x} ]
        then
-        awk -F $'\t' '{IGNORECASE = 1; if(match($0,"a[tu]g") > 0) print substr($0,match($0,"a[tu]g"));
-       else print ""}'
+        tee >(awk -F $'\t' '{IGNORECASE = 1; gsub("a[tu]g","X",$0); gsub(" ","",$0); if(match($0,"X") > 0) print match($0,"X");
+       else print ""}' > $makebed_start)
        else
         cat -
        fi |
+       awk -F $'\t' '{IGNORECASE = 1; if(match($0,"a[tu]g") > 0) print substr($0,match($0,"a[tu]g"));
+       else print ""}' |
        tee $ORFFILE2 |
-       if [ ! -z ${fullprot+x} ]
+       if [ ! -z ${makebed+x} ]
+       then
+        tee >(awk -F $'\t' '{IGNORECASE = 1; gsub("[tu]a[ag]|[tu]ga","X",$0); gsub(" ","",$0); if(match($0,"X") > 0) print match($0,"X") + 2;
+        else print ""}' > $makebed_end)
+       else
+        cat -
+       fi |
+       if [ ! -z ${fullorf+x} ]
       then
        awk -F $'\t' '{IGNORECASE = 1; if(match($0,"[tu]a[ag]|[tu]ga") > 0) print substr($0,1,match($0,"[tu]a[ag]|[tu]ga")+2);
       else print ""}'
@@ -1050,6 +1100,8 @@ arg=$1
        awk -F $'\t' '{IGNORECASE = 1; if(match($0,"[tu]a[ag]|[tu]ga") > 0) print substr($0,1,match($0,"[tu]a[ag]|[tu]ga")+2);
       else print $0}'
       fi |
+      if [ -z ${makebed+x} ]
+      then
        if [ ! -z ${translate+x} ]
        then
         translate - |
@@ -1077,17 +1129,23 @@ arg=$1
        else
         tr --delete " "
        fi >> ${!outcore_orf}
+       fi
        awk -F $'\t' -v orf_num="$orf_num" '{print $0"_orf"orf_num}' $ORFHEADERS >> ${!headcore_orf}
+       if [ ! -z ${makebed+x} ]
+       then
+        paste $seq_length_orf $makebed_start $makebed_end >> ${!makebed_orf}
+       fi
+
        SWITCH=$ORFFILE1; ORFFILE1=$ORFFILE2; ORFFILE2=$SWITCH
       done
-      
+            
       if [ ! -z ${verbose+x} ] && [ $orf_core -eq 0 ]
       then
        echo "100%" >> $(readlink /proc/$$/fd/2)
       fi
       
       # Cleanup
-      rm --force $ORFFILE1 $ORFFILE2 $ORFHEADERS
+      rm --force $ORFFILE1 $ORFFILE2 $ORFHEADERS $makebed_tmp $makebed_start $makebed_end
      }
      
      # Set Minimum protein length if minimum nucleotide size is set
@@ -1133,24 +1191,103 @@ arg=$1
       do
        declare OUTCORE$core=$(mktemp)
        declare HEADCORE$core=$(mktemp)
-       get_orfs ${start[$core]} ${end[$core]} $core $INFILE $HEADERS &
-       pids[$core]=$!
-      done     
+       if [ ! -z ${makebed+x} ]
+       then
+        declare makebed$core=$(mktemp)
+        get_orfs ${start[$core]} ${end[$core]} $core $INFILE $HEADERS <(awk -F $'\t' '{print length($0)}' $INFILE) &
+        pids[$core]=$!
+       else
+        get_orfs ${start[$core]} ${end[$core]} $core $INFILE $HEADERS &
+        pids[$core]=$!
+       fi
+      done
+      
       for pid in ${pids[*]}
       do
        wait $pid
       done
+      
       for ((core=0;core <= $(($threads - 1));core++))
       do
+      if [ ! -z ${makebed+x} ]
+      then
+       headcore_tmp=HEADCORE$core
+       makebedcore_tmp=makebed$core
+       cat ${!headcore_tmp} >> $HEADERS_TMP
+       cat ${!makebedcore_tmp} >> $OUTFILE
+      else
        headcore_tmp=HEADCORE$core
        outcore_tmp=OUTCORE$core
        cat ${!headcore_tmp} >> $HEADERS_TMP
        cat ${!outcore_tmp} >> $OUTFILE
+      fi
+      
+      if [ ! -z ${makebed+x} ]
+      then
+       rm --force ${!headcore_tmp} ${!makebedcore_tmp}
+      else
        rm --force ${!headcore_tmp} ${!outcore_tmp}
+      fi
+      
       done
-     
+
      rm --force $HEADERS
      HEADERS=$HEADERS_TMP
+     
+     if [ ! -z ${makebed+x} ]
+     then
+     SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
+     if [ "${#frame[@]}" -ne 1 ] || [ ${frame[0]} -ne 1 ]
+     then
+      paste <(sed -E 's/>//g' $HEADERS) \
+      <(sed -E 's/.+_frame([0-9])_orf[0-9]+/\1/g' $HEADERS) \
+      $INFILE
+     else
+      paste <(sed -E 's/>//g' $HEADERS) \
+      <(awk '{print 1}' $HEADERS) \
+      $INFILE
+     fi |
+     grep -vP "\t$" |
+     if [ -z ${min_max_seq_length+x} ]
+     then
+      awk -F $'\t' '{OFS="\t"};
+      {headers=$1}; {gsub(/_orf[0-9]+/,"",$1)}; {gsub(/_frame[0-9]+/,"",$1)};
+      $2 ~ 1{print $1,$4,$4+$5,$5,headers,0,"+"}
+      $2 ~ 2{print $1,$4+1,$4+$5+1,$5,headers,0,"+"}
+      $2 ~ 3{print $1,$4+2,$4+$5+2,$5,headers,0,"+"}
+      $2 ~ 4{print $1,$3-$4-$5+1,$3-$4+1,$5,headers,0,"-"}
+      $2 ~ 5{print $1,$3-$4-$5,$3-$4,$5,headers,0,"-"}
+      $2 ~ 6{print $1,$3-$4-$5-1,$3-$4-1,$5,headers,0,"-"}'
+     elif [ ${min_max_seq_length[1]} -eq 0 ]
+     then
+      awk -F $'\t' -v min_seq_length="${min_max_seq_length[0]}" '{OFS="\t"};
+      {headers=$1}; {gsub(/_orf[0-9]+/,"",$1)}; {gsub(/_frame[0-9]+/,"",$1)};
+      ($2 ~ 1 && $5 >= min_seq_length){print $1,$4,$4+$5,$5,headers,0,"+"}
+      ($2 ~ 2 && $5 >= min_seq_length){print $1,$4+1,$4+$5+1,$5,headers,0,"+"}
+      ($2 ~ 3 && $5 >= min_seq_length){print $1,$4+2,$4+$5+2,$5,headers,0,"+"}
+      ($2 ~ 4 && $5 >= min_seq_length){print $1,$3-$4-$5+1,$3-$4+1,$5,headers,0,"-"}
+      ($2 ~ 5 && $5 >= min_seq_length){print $1,$3-$4-$5,$3-$4,$5,headers,0,"-"}
+      ($2 ~ 6 && $5 >= min_seq_length){print $1,$3-$4-$5-1,$3-$4-1,$5,headers,0,"-"}'
+     else
+      awk -F $'\t' -v min_seq_length="${min_max_seq_length[0]}" -v max_seq_length="${min_max_seq_length[1]}" '{OFS="\t"};
+      {headers=$1}; {gsub(/_orf[0-9]+/,"",$1)}; {gsub(/_frame[0-9]+/,"",$1)};
+      ($2 ~ 1 && $5 >= min_seq_length && $5 <= max_seq_length){print $1,$4,$4+$5,$5,headers,0,"+"}
+      ($2 ~ 2 && $5 >= min_seq_length && $5 <= max_seq_length){print $1,$4+1,$4+$5+1,$5,headers,0,"+"}
+      ($2 ~ 3 && $5 >= min_seq_length && $5 <= max_seq_length){print $1,$4+2,$4+$5+2,$5,headers,0,"+"}
+      ($2 ~ 4 && $5 >= min_seq_length && $5 <= max_seq_length){print $1,$3-$4-$5+1,$3-$4+1,$5,headers,0,"-"}
+      ($2 ~ 5 && $5 >= min_seq_length && $5 <= max_seq_length){print $1,$3-$4-$5,$3-$4,$5,headers,0,"-"}
+      ($2 ~ 6 && $5 >= min_seq_length && $5 <= max_seq_length){print $1,$3-$4-$5-1,$3-$4-1,$5,headers,0,"-"}'
+     fi |
+     if [ ! -z $maxseq ]
+     then
+      sort --parallel="$threads" --key=1,1 --key=4,4nr |
+      cut --fields=1-3,5-7 |
+      awk -F $'\t' -v maxseq="$maxseq" 'NR==1{i=1; head=$1}; {if($1 == head) {if(i <= maxseq){print $0; i++; head=$1} else next} else {print $0; i=2; head=$1}}'
+     else
+      cut --fields=1-3,5-7
+     fi
+     exit 0
+     fi
 
      if [ ! -z ${verbose+x} ] && [ -z ${translate+x} ]
      then
@@ -1226,13 +1363,13 @@ arg=$1
      # Get maxseq number of largest sequences from each input sequence
      if [ ! -z ${maxseq+x} ]
      then
-      if [ ! -z ${verbose+x} ]; then echo "Extracting "$maxseq" longest sequence(s) for each input sequence" >> $(readlink /proc/$$/fd/2); fi
       SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
       awk -F $'\t' \
       '{OFS="\t"}; {headers=$1}; {seq=$2}; {gsub(/_orf[0-9]+/,"",$1)}; {gsub(/_frame[0-9]+/,"",$1)}; {gsub("*","",$2)};
       {print length($2),$1,headers,seq}' $INFILE |
-      sort --parallel="$threads" --numeric-sort --reverse |
-      sort --parallel="$threads" --unique --key=2,2 |
+      sort --parallel="$threads" --key=2,2 --key=1,1nr |
+      awk -F $'\t' -v maxseq="$maxseq"
+      'NR==1{i=1; head=$2}; {if($2 == head) {if(i <= maxseq){print $0; i++; head=$2} else next} else {print $0; i=2; head=$2}}' |
       cut --fields=3,4 > $OUTFILE
      fi
      
