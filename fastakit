@@ -1,7 +1,14 @@
 #!/usr/bin/env bash
 #set -x
 
+# Cleanup temp files
+cleanup(){
+ rm --force /tmp/fastakit.*
+}
+trap cleanup EXIT
+
 # Default parameters
+version=22.08
 time_start=$(date +%s)
 threads=$(command -v nproc --all &> /dev/null && nproc || echo 1)
 lettercase=0
@@ -148,7 +155,7 @@ arg=$1
   shift 2
   ;;
   --version)
-  echo "fastakit version 22.08" >> $(readlink /proc/$$/fd/2)
+  echo "fastakit version "$version >> $(readlink /proc/$$/fd/2)
   exit 0
   ;;
   --check)
@@ -190,7 +197,7 @@ arg=$1
   shift 2
   ;;
   --makebed)
-  makebed=$(mktemp)
+  makebed=$(mktemp --tmpdir=/tmp fastakit.XXXXXXXXXX)
   orf=1
   fullorf=1
   shift
@@ -428,29 +435,27 @@ arg=$1
      }
      
      function detect_mol(){
-     local input=$(mktemp)
+     local input=$(mktemp --tmpdir=/tmp fastakit.XXXXXXXXXX)
      head --bytes=5000000 $1 > $input
      if $(awk '{seq=length($0); gsub("[actguACTGU]","",$0)}; length($0)/seq > 0.25{exit 1}' $input)
      then
-      export MOL=$(mktemp)
+      export MOL=$(mktemp --tmpdir=/tmp fastakit.XXXXXXXXXX)
       export input
       parallel -j2 --halt now,success=1 ::: \
       'grep --ignore-case --max-count=1 "T" $input > /dev/null && echo "DNA" > $MOL' \
       'grep --ignore-case --max-count=1 "U" $input > /dev/null && echo "RNA" > $MOL' &> /dev/null
       MOLECULE=$(cat $MOL)
-      rm --force $MOL
      else
       MOLECULE="PROTEIN"
      fi
      if [ ! -z ${detect+x} ]; then echo $MOLECULE; fi
      if [ ! -z ${verbose+x} ]; then echo "Detected molecule: "$MOLECULE >> $(readlink /proc/$$/fd/2); fi
-     rm --force $input
      }
      
      function res_enz(){
-      local input=$(mktemp)
-      local reout=$(mktemp)
-      local enztmp=$(mktemp)
+      local input=$(mktemp --tmpdir=/tmp fastakit.XXXXXXXXXX)
+      local reout=$(mktemp --tmpdir=/tmp fastakit.XXXXXXXXXX)
+      local enztmp=$(mktemp --tmpdir=/tmp fastakit.XXXXXXXXXX)
       local num='^[0-9]+$'
       cut --fields=2 $1 > $input
       local enz_name=$2
@@ -475,9 +480,9 @@ arg=$1
         local repat_max=0
        fi
       else
-       reheads=$(mktemp)
-       repat=$(mktemp)
-       retmp=$(mktemp)
+       reheads=$(mktemp --tmpdir=/tmp fastakit.XXXXXXXXXX)
+       repat=$(mktemp --tmpdir=/tmp fastakit.XXXXXXXXXX)
+       retmp=$(mktemp --tmpdir=/tmp fastakit.XXXXXXXXXX)
        if [ ! -z ${verbose+x} ]; then echo "Downloading restriction enzyme recognition sites" >> $(readlink /proc/$$/fd/2); fi
        wget --quiet --show-progress --output-document=- ftp://ftp.neb.com/pub/rebase/withref.txt |
        grep --perl-regexp "\<1\>|\<5\>" |
@@ -504,9 +509,9 @@ arg=$1
        s/v/[acg]/gi' |
        grep --perl-regexp --invert-match "^$" > $repat
        paste <(cut --fields=1 $reheads | grep --perl-regexp --invert-match "^$") $repat |
-       sort --key=2,2 | uniq --skip-fields=1 --group="both" > $retmp
+       sort --field-separator=$'\t' --key=2,2 |
+       uniq --skip-fields=1 --group="both" > $retmp
        paste <(cut --fields=1 $retmp | tr "\n" ";" | sed --regexp-extended 's/;;/\n/g; s/^;//g') <(cut --fields=2 $retmp | grep -v "^$" | uniq) > $repat
-       rm --force $reheads $retmp
        retmp=$repat
        fi
        
@@ -522,12 +527,8 @@ arg=$1
         local repat_min=0
         local repat_max=0
        fi
-       if [ ! -f $(echo $(dirname $(readlink --canonicalize $(which fastakit)))"/neb_rebase") ]
-       then
-        rm --force $retmp
-       fi
+       
       # Loop over all restriction enzymes
-
        for ((re=0; re <= $((${#repat[@]} - 1)); re++))
        do
         repat_len=$(echo $(($(sed --regexp-extended 's/[[][actgu]+[]]/[/gi' <(echo "${repat[$re]}") | wc -m) - 1)))
@@ -547,8 +548,7 @@ arg=$1
        done
        if [ ! -z ${verbose+x} ]; then echo -en "\n\n" >> $(readlink /proc/$$/fd/2); fi
        sed --regexp-extended 's/\t+/\t/g; s/^\t//g; s/\t$//g' $reout
-       rm --force $enztmp $reout $input
-     }
+       }
      
      function random(){
      if [[ $MOLECULE = "DNA" ]]
@@ -620,7 +620,7 @@ arg=$1
      FILE="$1"
     else
      stdin=1
-     FILE=$(mktemp)
+     FILE=$(mktemp --tmpdir=/tmp fastakit.XXXXXXXXXX)
      cat /dev/stdin > $FILE
     fi
     
@@ -631,9 +631,9 @@ arg=$1
      exit 0
     fi
 
-    HEADERS=$(mktemp)
-    INFILE=$(mktemp)
-    OUTFILE=$(mktemp)
+    HEADERS=$(mktemp --tmpdir=/tmp fastakit.XXXXXXXXXX)
+    INFILE=$(mktemp --tmpdir=/tmp fastakit.XXXXXXXXXX)
+    OUTFILE=$(mktemp --tmpdir=/tmp fastakit.XXXXXXXXXX)
     
     if [ ! -z ${verbose+x} ]; then echo -en "Using "$threads" thread(s)\n\n" >> $(readlink /proc/$$/fd/2); fi
 
@@ -742,13 +742,6 @@ arg=$1
      fi
     fi
     
-    # Cleanup temp files
-    rm --force $OUTFILE $INFILE $HEADERS
-    if [ ! -z ${stdin+x} ]
-    then
-     rm --force $FILE
-    fi
-    
     if [ ! -z ${verbose+x} ]
     then
      echo -ne "\nMulti line conversion done: " >> $(readlink /proc/$$/fd/2)
@@ -773,7 +766,7 @@ arg=$1
     
     if [ ! -z ${stats+x} ]
     then
-     lengths=$(mktemp)
+     lengths=$(mktemp --tmpdir=/tmp fastakit.XXXXXXXXXX)
      awk '{print length($0)}' $OUTFILE | sort -rn > $lengths
      total=$(awk '{OFS="\t"}; {sum+=$0}; END{printf "%.0f", sum}' $lengths)
      l50_idx=$(awk '{OFS="\t"}; {sum+=$0}; {printf "%s%s%.0f\n", NR,OFS,sum}' $lengths |
@@ -797,7 +790,6 @@ arg=$1
      echo -e "N50\t"$l50_idx >> $(readlink /proc/$$/fd/2)
      echo -e "L90\t"$(awk -v l90_idx=$l90_idx 'NR==l90_idx{printf "%.0f", $0}' $lengths) >> $(readlink /proc/$$/fd/2)
      echo -e "N90\t"$l90_idx >> $(readlink /proc/$$/fd/2)
-     rm --force $lengths
      exit 0
     fi
     
@@ -889,8 +881,8 @@ arg=$1
      if [ "${#frame[@]}" -ne 1 ] || [ ${frame[0]} -ne 1 ]
      then
      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
-     ADD_frame=$(mktemp)
-     ADD_headers=$(mktemp)
+     ADD_frame=$(mktemp --tmpdir=/tmp fastakit.XXXXXXXXXX)
+     ADD_headers=$(mktemp --tmpdir=/tmp fastakit.XXXXXXXXXX)
      if [[ "${frame[@]}" =~ 1 ]]
      then
       cat $INFILE >> $ADD_frame
@@ -908,7 +900,7 @@ arg=$1
      fi
      if [[ "${frame[@]}" =~ 4 ]] || [[ "${frame[@]}" =~ 5 ]] || [[ "${frame[@]}" =~ 6 ]]
      then
-      INFILE_revcomp=$(mktemp)
+      INFILE_revcomp=$(mktemp --tmpdir=/tmp fastakit.XXXXXXXXXX)
       parallel -a $INFILE -k -j"$threads" --block 30M --pipepart 'rev' |
       parallel -k -j"$threads" --block 30M --pipe 'tr \"ATCGUatcgu\" \"TAGCAtagca\"' \
       > $INFILE_revcomp
@@ -928,7 +920,6 @@ arg=$1
        awk -F $'\t' '{print $0"_frame6"}' $HEADERS >> $ADD_headers
       fi
      fi
-     rm --force $OUTFILE $INFILE_revcomp $HEADERS
      HEADERS=$ADD_headers
      OUTFILE=$ADD_frame
      fi
@@ -958,9 +949,11 @@ arg=$1
      if [ ! -z ${makebed+x} ]
      then
       local makebed_orf=makebed$orf_core
-      local makebed_start=$(mktemp)
-      local makebed_end=$(mktemp)
-      local seq_length_orf=$(mktemp)
+      local makebed_tmp=$(mktemp --tmpdir=/tmp fastakit.XXXXXXXXXX)
+      local makebed_tmp2=$(mktemp --tmpdir=/tmp fastakit.XXXXXXXXXX)
+      local makebed_start=$(mktemp --tmpdir=/tmp fastakit.XXXXXXXXXX)
+      local makebed_end=$(mktemp --tmpdir=/tmp fastakit.XXXXXXXXXX)
+      local seq_length_orf=$(mktemp --tmpdir=/tmp fastakit.XXXXXXXXXX)
       if [[ $threads != 1 ]]
       then
        sed --quiet ''"$ORFstart"','"$ORFend"'p;'"$(($ORFend + 1))"'q' $6 > $seq_length_orf
@@ -970,9 +963,9 @@ arg=$1
      else
       local outcore_orf=OUTCORE$orf_core
      fi
-     local ORFHEADERS=$(mktemp)
-     local ORFFILE1=$(mktemp)
-     local ORFFILE2=$(mktemp)
+     local ORFHEADERS=$(mktemp --tmpdir=/tmp fastakit.XXXXXXXXXX)
+     local ORFFILE1=$(mktemp --tmpdir=/tmp fastakit.XXXXXXXXXX)
+     local ORFFILE2=$(mktemp --tmpdir=/tmp fastakit.XXXXXXXXXX)
      
      if [[ $threads != 1 ]]
      then
@@ -1044,7 +1037,9 @@ arg=$1
       awk -F $'\t' -v orf_num="$orf_num" '{print $0"_orf"orf_num}' $ORFHEADERS > ${!headcore_orf}
       if [ ! -z ${makebed+x} ]
       then
-       paste $seq_length_orf $makebed_start $makebed_end > ${!makebed_orf}
+       awk '{print 0}' $makebed_end > $makebed_tmp
+       paste $seq_length_orf $makebed_start $makebed_end $makebed_tmp > ${!makebed_orf}
+       awk -F $'\t' '{print $2+$3-1}' ${!makebed_orf} > $makebed_tmp
       fi
       
       SWITCH=$ORFFILE1; ORFFILE1=$ORFFILE2; ORFFILE2=$SWITCH
@@ -1133,7 +1128,9 @@ arg=$1
        awk -F $'\t' -v orf_num="$orf_num" '{print $0"_orf"orf_num}' $ORFHEADERS >> ${!headcore_orf}
        if [ ! -z ${makebed+x} ]
        then
-        paste $seq_length_orf $makebed_start $makebed_end >> ${!makebed_orf}
+        paste $seq_length_orf $makebed_start $makebed_end $makebed_tmp >> ${!makebed_orf}
+        awk -F $'\t' '{print $1+$2+$3-1}' <(paste $makebed_start $makebed_end $makebed_tmp) > $makebed_tmp2
+        cp --force $makebed_tmp2 $makebed_tmp
        fi
 
        SWITCH=$ORFFILE1; ORFFILE1=$ORFFILE2; ORFFILE2=$SWITCH
@@ -1143,9 +1140,6 @@ arg=$1
       then
        echo "100%" >> $(readlink /proc/$$/fd/2)
       fi
-      
-      # Cleanup
-      rm --force $ORFFILE1 $ORFFILE2 $ORFHEADERS $makebed_tmp $makebed_start $makebed_end
      }
      
      # Set Minimum protein length if minimum nucleotide size is set
@@ -1183,17 +1177,17 @@ arg=$1
      done
      
      # Loop for function getting ORFs for multithreading
-     HEADERS_TMP=$(mktemp)
+     HEADERS_TMP=$(mktemp --tmpdir=/tmp fastakit.XXXXXXXXXX)
      : > $OUTFILE
      : > $HEADERS_TMP
 
       for ((core=0;core <= $(($threads - 1));core++))
       do
-       declare OUTCORE$core=$(mktemp)
-       declare HEADCORE$core=$(mktemp)
+       declare OUTCORE$core=$(mktemp --tmpdir=/tmp fastakit.XXXXXXXXXX)
+       declare HEADCORE$core=$(mktemp --tmpdir=/tmp fastakit.XXXXXXXXXX)
        if [ ! -z ${makebed+x} ]
        then
-        declare makebed$core=$(mktemp)
+        declare makebed$core=$(mktemp --tmpdir=/tmp fastakit.XXXXXXXXXX)
         get_orfs ${start[$core]} ${end[$core]} $core $INFILE $HEADERS <(awk -F $'\t' '{print length($0)}' $INFILE) &
         pids[$core]=$!
        else
@@ -1221,17 +1215,8 @@ arg=$1
        cat ${!headcore_tmp} >> $HEADERS_TMP
        cat ${!outcore_tmp} >> $OUTFILE
       fi
-      
-      if [ ! -z ${makebed+x} ]
-      then
-       rm --force ${!headcore_tmp} ${!makebedcore_tmp}
-      else
-       rm --force ${!headcore_tmp} ${!outcore_tmp}
-      fi
-      
-      done
+     done
 
-     rm --force $HEADERS
      HEADERS=$HEADERS_TMP
      
      if [ ! -z ${makebed+x} ]
@@ -1239,53 +1224,56 @@ arg=$1
      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
      if [ "${#frame[@]}" -ne 1 ] || [ ${frame[0]} -ne 1 ]
      then
-      paste <(sed -E 's/>//g' $HEADERS) \
-      <(sed -E 's/.+_frame([0-9])_orf[0-9]+/\1/g' $HEADERS) \
+      paste <(sed --regexp-extended 's/>//g' $HEADERS) \
+      <(sed --regexp-extended 's/.+_frame([0-9])_orf[0-9]+/\1/g' $HEADERS) \
       $INFILE
      else
-      paste <(sed -E 's/>//g' $HEADERS) \
+      paste <(sed --regexp-extended 's/>//g' $HEADERS) \
       <(awk '{print 1}' $HEADERS) \
       $INFILE
      fi |
-     grep -vP "\t$" |
+     grep --perl-regexp --invert-match "\t\t" |
      if [ -z ${min_max_seq_length+x} ]
      then
       awk -F $'\t' '{OFS="\t"};
       {headers=$1}; {gsub(/_orf[0-9]+/,"",$1)}; {gsub(/_frame[0-9]+/,"",$1)};
-      $2 ~ 1{print $1,$4,$4+$5,$5,headers,0,"+"}
-      $2 ~ 2{print $1,$4+1,$4+$5+1,$5,headers,0,"+"}
-      $2 ~ 3{print $1,$4+2,$4+$5+2,$5,headers,0,"+"}
-      $2 ~ 4{print $1,$3-$4-$5+1,$3-$4+1,$5,headers,0,"-"}
-      $2 ~ 5{print $1,$3-$4-$5,$3-$4,$5,headers,0,"-"}
-      $2 ~ 6{print $1,$3-$4-$5-1,$3-$4-1,$5,headers,0,"-"}'
+      $2 ~ 1{print $1,$4+$6-1,$4+$5+$6-1,$5,headers,0,"+",$4+$6-1,$4+$5+$6-1,"0,128,255"}
+      $2 ~ 2{print $1,$4+$6,$4+$5+$6,$5,headers,0,"+",$4+$6,$4+$5+$6,"0,164,255"}
+      $2 ~ 3{print $1,$4+$6+1,$4+$5+$6+1,$5,headers,0,"+",$4+$6+1,$4+$5+$6+1,"0,200,255"}
+      $2 ~ 4{print $1,$3-$4-$5-$6+1,$3-$4-$6+1,$5,headers,0,"-",$3-$4-$6+1,$3-$4-$5-$6+1,"255,128,0"}
+      $2 ~ 5{print $1,$3-$4-$5-$6+1,$3-$4-$6+1,$5,headers,0,"-",$3-$4-$6+1,$3-$4-$5-$6+1,"255,164,0"}
+      $2 ~ 6{print $1,$3-$4-$5-$6+1,$3-$4-$6+1,$5,headers,0,"-",$3-$4-$6+1,$3-$4-$5-$6+1,"255,200,0"}'
      elif [ ${min_max_seq_length[1]} -eq 0 ]
      then
       awk -F $'\t' -v min_seq_length="${min_max_seq_length[0]}" '{OFS="\t"};
       {headers=$1}; {gsub(/_orf[0-9]+/,"",$1)}; {gsub(/_frame[0-9]+/,"",$1)};
-      ($2 ~ 1 && $5 >= min_seq_length){print $1,$4,$4+$5,$5,headers,0,"+"}
-      ($2 ~ 2 && $5 >= min_seq_length){print $1,$4+1,$4+$5+1,$5,headers,0,"+"}
-      ($2 ~ 3 && $5 >= min_seq_length){print $1,$4+2,$4+$5+2,$5,headers,0,"+"}
-      ($2 ~ 4 && $5 >= min_seq_length){print $1,$3-$4-$5+1,$3-$4+1,$5,headers,0,"-"}
-      ($2 ~ 5 && $5 >= min_seq_length){print $1,$3-$4-$5,$3-$4,$5,headers,0,"-"}
-      ($2 ~ 6 && $5 >= min_seq_length){print $1,$3-$4-$5-1,$3-$4-1,$5,headers,0,"-"}'
+      ($2 ~ 1 && $5 >= min_seq_length){print $1,$4+$6-1,$4+$5+$6-1,$5,headers,0,"+",$4+$6-1,$4+$5+$6-1,"0,128,255"}
+      ($2 ~ 2 && $5 >= min_seq_length){print $1,$4+$6,$4+$5+$6,$5,headers,0,"+",$4+$6,$4+$5+$6,"0,164,255"}
+      ($2 ~ 3 && $5 >= min_seq_length){print $1,$4+$6+1,$4+$5+$6+1,$5,headers,0,"+",$4+$6+1,$4+$5+$6+1,"0,200,255"}
+      ($2 ~ 4 && $5 >= min_seq_length){print $1,$3-$4-$5-$6+1,$3-$4-$6+1,$5,headers,0,"-",$3-$4-$6+1,$3-$4-$5-$6+1,"255,128,0"}
+      ($2 ~ 5 && $5 >= min_seq_length){print $1,$3-$4-$5-$6+1,$3-$4-$6+1,$5,headers,0,"-",$3-$4-$6+1,$3-$4-$5-$6+1,"255,164,0"}
+      ($2 ~ 6 && $5 >= min_seq_length){print $1,$3-$4-$5-$6+1,$3-$4-$6+1,$5,headers,0,"-",$3-$4-$6+1,$3-$4-$5-$6+1,"255,200,0"}'
      else
       awk -F $'\t' -v min_seq_length="${min_max_seq_length[0]}" -v max_seq_length="${min_max_seq_length[1]}" '{OFS="\t"};
       {headers=$1}; {gsub(/_orf[0-9]+/,"",$1)}; {gsub(/_frame[0-9]+/,"",$1)};
-      ($2 ~ 1 && $5 >= min_seq_length && $5 <= max_seq_length){print $1,$4,$4+$5,$5,headers,0,"+"}
-      ($2 ~ 2 && $5 >= min_seq_length && $5 <= max_seq_length){print $1,$4+1,$4+$5+1,$5,headers,0,"+"}
-      ($2 ~ 3 && $5 >= min_seq_length && $5 <= max_seq_length){print $1,$4+2,$4+$5+2,$5,headers,0,"+"}
-      ($2 ~ 4 && $5 >= min_seq_length && $5 <= max_seq_length){print $1,$3-$4-$5+1,$3-$4+1,$5,headers,0,"-"}
-      ($2 ~ 5 && $5 >= min_seq_length && $5 <= max_seq_length){print $1,$3-$4-$5,$3-$4,$5,headers,0,"-"}
-      ($2 ~ 6 && $5 >= min_seq_length && $5 <= max_seq_length){print $1,$3-$4-$5-1,$3-$4-1,$5,headers,0,"-"}'
+      ($2 ~ 1 && $5 >= min_seq_length && $5 <= max_seq_length){print $1,$4+$6-1,$4+$5+$6-1,$5,headers,0,"+",$4+$6-1,$4+$5+$6-1,"0,128,255"}
+      ($2 ~ 2 && $5 >= min_seq_length && $5 <= max_seq_length){print $1,$4+$6,$4+$5+$6,$5,headers,0,"+",$4+$6,$4+$5+$6,"0,164,255"}
+      ($2 ~ 3 && $5 >= min_seq_length && $5 <= max_seq_length){print $1,$4+$6+1,$4+$5+$6+1,$5,headers,0,"+",$4+$6+1,$4+$5+$6+1,"0,200,255"}
+      ($2 ~ 4 && $5 >= min_seq_length && $5 <= max_seq_length){print $1,$3-$4-$5-$6+1,$3-$4-$6+1,$5,headers,0,"-",$3-$4-$6+1,$3-$4-$5-$6+1,"255,128,0"}
+      ($2 ~ 5 && $5 >= min_seq_length && $5 <= max_seq_length){print $1,$3-$4-$5-$6+1,$3-$4-$6+1,$5,headers,0,"-",$3-$4-$6+1,$3-$4-$5-$6+1,"255,164,0"}
+      ($2 ~ 6 && $5 >= min_seq_length && $5 <= max_seq_length){print $1,$3-$4-$5-$6+1,$3-$4-$6+1,$5,headers,0,"-",$3-$4-$6+1,$3-$4-$5-$6+1,"255,200,0"}'
      fi |
      if [ ! -z $maxseq ]
      then
-      sort --parallel="$threads" --key=1,1 --key=4,4nr |
-      cut --fields=1-3,5-7 |
-      awk -F $'\t' -v maxseq="$maxseq" 'NR==1{i=1; head=$1}; {if($1 == head) {if(i <= maxseq){print $0; i++; head=$1} else next} else {print $0; i=2; head=$1}}'
+      sort --parallel="$threads" --field-separator=$'\t' --key=1,1 --key=4,4nr |
+      cut --fields=1-3,5-10 |
+      awk -F $'\t' -v maxseq="$maxseq" 'NR==1{i=1; head=$1}; {if($1 == head) {if(i <= maxseq){print $0; i++; head=$1} else next} else {print $0; i=2; head=$1}}' |
+      sort --parallel="$threads" --field-separator=$'\t' --key=2,2n
      else
-      cut --fields=1-3,5-7
-     fi
+      cut --fields=1-3,5-10 |
+      sort --parallel="$threads" --field-separator=$'\t' --key=2,2n
+     fi |
+     cat <(echo -e "# Created with fastakit version "$version"\n") -
      exit 0
      fi
 
@@ -1367,7 +1355,7 @@ arg=$1
       awk -F $'\t' \
       '{OFS="\t"}; {headers=$1}; {seq=$2}; {gsub(/_orf[0-9]+/,"",$1)}; {gsub(/_frame[0-9]+/,"",$1)}; {gsub("*","",$2)};
       {print length($2),$1,headers,seq}' $INFILE |
-      sort --parallel="$threads" --key=2,2 --key=1,1nr |
+      sort --parallel="$threads" --field-separator=$'\t' --key=2,2 --key=1,1nr |
       awk -F $'\t' -v maxseq="$maxseq"
       'NR==1{i=1; head=$2}; {if($2 == head) {if(i <= maxseq){print $0; i++; head=$2} else next} else {print $0; i=2; head=$2}}' |
       cut --fields=3,4 > $OUTFILE
@@ -1376,7 +1364,7 @@ arg=$1
      if [ ! -z ${unique+x} ]
      then
       SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
-      sort --ignore-case --parallel="$threads" --unique --key=2,2 $INFILE > $OUTFILE
+      sort --ignore-case --parallel="$threads" --field-separator=$'\t' --unique --key=2,2 $INFILE > $OUTFILE
       if [ ! -z ${verbose+x} ]
       then
        echo -n "Remove duplicates done: " >> $(readlink /proc/$$/fd/2)
@@ -1438,9 +1426,9 @@ arg=$1
       then
        echo "Sort in reverse order" >> $(readlink /proc/$$/fd/2)
       fi
-       sort --parallel="$threads" --numeric-sort --reverse
+       sort --parallel="$threads" --field-separator=$'\t' --numeric-sort --reverse
       else
-       sort --parallel="$threads" --numeric-sort
+       sort --parallel="$threads" --field-separator=$'\t' --numeric-sort
       fi |
       cut --fields=2,3 > $OUTFILE
       if [ ! -z ${verbose+x} ]
@@ -1466,7 +1454,6 @@ arg=$1
        show_time $(($(date +%s) - time_start))
        echo "" >> $(readlink /proc/$$/fd/2)
       fi
-      rm --force $INFILE $OUTFILE $HEADERS
       exit 0
      fi
      
@@ -1491,7 +1478,6 @@ arg=$1
        show_time $(($(date +%s) - time_start))
        echo "" >> $(readlink /proc/$$/fd/2)
       fi
-      rm --force $INFILE $OUTFILE $HEADERS
       exit 0
     fi
     
@@ -1509,7 +1495,6 @@ arg=$1
        show_time $(($(date +%s) - time_start))
        echo "" >> $(readlink /proc/$$/fd/2)
       fi
-      rm --force $INFILE $OUTFILE $HEADERS
       exit 0
      fi
      
@@ -1531,7 +1516,6 @@ arg=$1
        echo -en "\nSequence separation done: " >> $(readlink /proc/$$/fd/2)
        show_time $(($(date +%s) - time_start))
       fi
-      rm --force $INFILE $OUTFILE $HEADERS
       exit 0
      fi
      
@@ -1555,13 +1539,6 @@ arg=$1
      else
       cat $OUTFILE
      fi
-    fi
-    
-    # Cleanup temp files
-    rm --force $INFILE $OUTFILE $HEADERS
-    if [ ! -z ${stdin+x} ]
-    then
-     rm --force $FILE
     fi
     
     if [ ! -z ${verbose+x} ]
