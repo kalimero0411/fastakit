@@ -1,19 +1,19 @@
 #!/usr/bin/env bash
 #set -x
 
-# Cleanup temp files
-cleanup(){
- rm --force /tmp/fastakit.*
-}
-trap cleanup EXIT
-
 # Default parameters
-version=22.08
+version=22.09
 time_start=$(date +%s)
 threads=$(command -v nproc --all &> /dev/null && nproc || echo 1)
 lettercase=0
 frame=1
 translate_table=1
+
+# Cleanup temp files
+cleanup(){
+ rm --force /tmp/fastakit.*
+}
+trap cleanup EXIT
 
 function print_usage(){
  printf "
@@ -47,7 +47,7 @@ fastakit [OPTIONS] [Sequence.fasta | stdin]
 	--fullorf	Return only ORFs with start and stop codons
 	--makebed	Create BED output for ORFs (Assumes --orf and --fullorf)
 	--detect	Detect molucule and exit
-	--re #,#,#,#	Detect restriction enzyme recognition sites (Restriction enzyme name, min_length, max_length, min_number, max_number; 0 to ignore)
+	--re string,#,#,#,#	Detect restriction enzyme recognition sites (Restriction enzyme name, min_length, max_length, min_number, max_number; 0 to ignore; 'list' to list all enzymes)
 	-t | --threads #	Number of CPU threads to use (Default = Detected processors or 1)
 	-v | --verbose	Verbose
 	-h | --help	Display help
@@ -456,7 +456,7 @@ arg=$1
       local input=$(mktemp --tmpdir=/tmp fastakit.XXXXXXXXXX)
       local reout=$(mktemp --tmpdir=/tmp fastakit.XXXXXXXXXX)
       local enztmp=$(mktemp --tmpdir=/tmp fastakit.XXXXXXXXXX)
-      local num='^[0-9]+$'
+      local is_enz='[[:alpha:]]'
       cut --fields=2 $1 > $input
       local enz_name=$2
       local repat_min=$3
@@ -468,22 +468,11 @@ arg=$1
       if [ -f $(echo $(dirname $(readlink --canonicalize $(which fastakit)))"/neb_rebase") ]
       then
        local retmp=$(echo $(dirname $(readlink --canonicalize $(which fastakit)))"/neb_rebase")
-       if [[ $enz_name =~ $num ]]
-       then
-        local repat=($(cut --fields=2 $retmp | tr "\n" " "))
-        local reheads=($(cut --fields=1 $retmp | tr "\n" " "))
-       else
-        repat_tmp=($(grep --ignore-case --perl-regexp '^'"$enz_name"'[\t;]|;'"$enz_name"'[\t;]' $retmp | tr "\t" " "))
-        reheads=${repat_tmp[0]}
-        repat=${repat_tmp[1]}
-        local repat_min=0
-        local repat_max=0
-       fi
       else
        reheads=$(mktemp --tmpdir=/tmp fastakit.XXXXXXXXXX)
        repat=$(mktemp --tmpdir=/tmp fastakit.XXXXXXXXXX)
        retmp=$(mktemp --tmpdir=/tmp fastakit.XXXXXXXXXX)
-       if [ ! -z ${verbose+x} ]; then echo "Downloading restriction enzyme recognition sites" >> $(readlink /proc/$$/fd/2); fi
+       if [ ! -z ${verbose+x} ]; then echo "Downloading restriction enzyme recognition sites..." >> $(readlink /proc/$$/fd/2); fi
        wget --quiet --show-progress --output-document=- ftp://ftp.neb.com/pub/rebase/withref.txt |
        grep --perl-regexp "\<1\>|\<5\>" |
        tr --delete "\n" |
@@ -515,17 +504,24 @@ arg=$1
        retmp=$repat
        fi
        
-       # Create search arrays
-       if [[ $repat_min =~ $num ]]
+       if [[ $enz_name =~ "list" ]]
        then
-        repat=($(cut --fields=2 $retmp | tr "\n" " "))
-        reheads=($(cut --fields=1 $retmp | tr "\n" " "))        
-       else
+        cut --fields=1 $retmp |
+        tr ";" "\n"
+        exit 0
+       fi
+       
+       # Create search arrays
+       if [[ $enz_name =~ $is_enz ]]
+       then
         repat_tmp=($(grep --ignore-case --perl-regexp '^'"$enz_name"'[\t;]|;'"$enz_name"'[\t;]' $retmp | tr "\t" " "))
         reheads=${repat_tmp[0]}
         repat=${repat_tmp[1]}	
         local repat_min=0
         local repat_max=0
+       else
+        repat=($(cut --fields=2 $retmp | tr "\n" " "))
+        reheads=($(cut --fields=1 $retmp | tr "\n" " "))        
        fi
        
       # Loop over all restriction enzymes
@@ -1486,9 +1482,15 @@ arg=$1
      then
      if [ ! -z ${verbose+x} ]; then echo "Detecting restriction sites" >> $(readlink /proc/$$/fd/2); fi
       SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
+      if [[ "${min_max_re[0]=0}" =~ "list" ]]
+       then
+        res_enz $INFILE ${min_max_re[0]=0} ${min_max_re[1]=0} ${min_max_re[2]=0} ${min_max_re[3]=0} ${min_max_re[4]=0}
+        exit 0
+      else
       paste <(cut --fields=1 $INFILE | tr --delete ">") \
       <(res_enz $INFILE ${min_max_re[0]=0} ${min_max_re[1]=0} ${min_max_re[2]=0} ${min_max_re[3]=0} ${min_max_re[4]=0}) |
       grep --perl-regexp --invert-match "\t$"
+      fi
       if [ ! -z ${verbose+x} ]
       then
        echo -n "Restriction site detection done: " >> $(readlink /proc/$$/fd/2)
