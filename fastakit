@@ -1406,7 +1406,7 @@ arg=$1
       '{OFS="\t"}; {headers=$1}; {seq=$2}; {gsub(/_orf[0-9]+/,"",$1)}; {gsub(/_frame[0-9]+/,"",$1)}; {gsub("*","",$2)};
       {print length($2),$1,headers,seq}' $INFILE |
       sort --parallel="$threads" --field-separator=$'\t' --key=2,2 --key=1,1nr |
-      awk -F $'\t' -v maxseq="$maxseq"
+      awk -F $'\t' -v maxseq="$maxseq" \
       'NR==1{i=1; head=$2}; {if($2 == head) {if(i <= maxseq){print $0; i++; head=$2} else next} else {print $0; i=2; head=$2}}' |
       cut --fields=3,4 > $OUTFILE
      fi
