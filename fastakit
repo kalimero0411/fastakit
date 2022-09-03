@@ -192,8 +192,7 @@ arg=$1
   shift
   ;;
   --multi)
-  multi=1 # Covert to multiline FASTA
-  multi_length=$2
+  multi=$2 # Covert to multiline FASTA
   shift 2
   ;;
   --makebed)
@@ -288,7 +287,7 @@ arg=$1
     else
         ((sec=num))
     fi
-    echo "$day"d "$hour"h "$min"m "$sec"s >> $(readlink /proc/$$/fd/2)
+    echo -e "$day"d "$hour"h "$min"m "$sec"s"\n" >> $(readlink /proc/$$/fd/2)
 }
 
   # Translation function
@@ -546,24 +545,123 @@ arg=$1
        sed --regexp-extended 's/\t+/\t/g; s/^\t//g; s/\t$//g' $reout
        }
      
+     # Random sequence function
      function random(){
+     if test -n "$1"
+      then
+       cat $1
+      else
+       cat -
+      fi |
      if [[ $MOLECULE = "DNA" ]]
       then
-       paste <(cut --fields=1 $1) <(cut --fields=2 $1 | awk -F $'\t' '{print system("tr --delete --complement ATGC < /dev/urandom | head --bytes="length($0))}' |
-      tr --delete 0)
+       cut --fields=2 |
+       awk -F $'\t' '{print system("tr --delete --complement ATGC < /dev/urandom | head --bytes="length($0))}' |
+       tr --delete 0
       elif [[ $MOLECULE = "RNA" ]]
       then
-       paste <(cut --fields=1 $1) <(cut --fields=2 $1 | awk -F $'\t' '{print system("tr --delete --complement AUCG < /dev/urandom | head --bytes="length($0))}' |
-      tr --delete 0)
+       cut --fields=2 |
+       awk -F $'\t' '{print system("tr --delete --complement AUCG < /dev/urandom | head --bytes="length($0))}' |
+       tr --delete 0
       elif [[ $MOLECULE = "PROTEIN" ]]
       then
-      paste <(cut --fields=1 $1) <(cut --fields=2 $1 | tr -d "*" |
-      awk -F $'\t' '{print system("tr --delete --complement ARNCEQGHILKMFPSTWYV < /dev/urandom | head --bytes="length($0))}' |
-      tr --delete 0)
+       cut --fields=2 |
+       tr -d "*" |
+       awk -F $'\t' '{print system("tr --delete --complement ARNCEQGHILKMFPSTWYV < /dev/urandom | head --bytes="length($0))}' |
+       tr --delete 0
       else
        echo "Invalid molucule type!" >> $(readlink /proc/$$/fd/2)
        exit 1
       fi
+      }
+      
+      # Multi-line conversion function
+      multiline(){
+      paste $1 $2 |
+     grep --perl-regexp --invert-match "\t$" |
+     tr "\t" "\n" |
+      if [ $(grep --count --perl-regexp --ignore-case "^>.+[ACTGU]{$multi}" $HEADERS) -eq 0 ]
+      then
+       sed --regexp-extended "s/\r//g; s/([ACTGUactgu]{$multi})/\1\n/g"
+      else
+       awk -F "" -v multi="$multi" '/>/{print $0}; !/>/{for(i=1; i<=NF; i+=multi) {print substr($0,i,multi);}}'
+      fi
+      }
+      
+      # Count non-nucleotide characters function
+      fun_nonnuc(){
+      paste <(cat $1 | tr --delete ">") <(cat $2 | tr --delete "ACTGUactgu" | awk '{print length($0)}') |
+      grep --invert-match --perl-regexp "\t0"
+     }
+     
+     # Sequence statistics function
+     seq_stats(){
+     lengths=$(mktemp --tmpdir=/tmp fastakit.XXXXXXXXXX)
+     awk '{print length($0)}' $1 | sort -rn > $lengths
+     total=$(awk '{OFS="\t"}; {sum+=$0}; END{printf "%.0f", sum}' $lengths)
+     l50_idx=$(awk '{OFS="\t"}; {sum+=$0}; {printf "%s%s%.0f\n", NR,OFS,sum}' $lengths |
+     awk -v total=$total -F $'\t' '{if($2 > (total*0.5))printf "%.0f\n", $1}' |
+     head -1)
+     l90_idx=$(awk '{OFS="\t"}; {sum+=$0}; {printf "%s%s%.0f\n", NR,OFS,sum}' $lengths |
+     awk -v total=$total -F $'\t' '{if($2 > (total*0.9))printf "%.0f\n", $1}' |
+     head -1)
+     num_seq=$(cat $lengths | wc -l)
+     half_num=$(awk -v num_seq=$num_seq 'NR==(int(num_seq/2)+1){printf $0}' $lengths)
+     echo -e "Total length\t"$total >> $(readlink /proc/$$/fd/2)
+     echo -e "Sequence #\t"$num_seq >> $(readlink /proc/$$/fd/2)
+     echo -e "Longest sequence\t"$(head -1 $lengths) >> $(readlink /proc/$$/fd/2)
+     echo -e "Shortest sequence\t"$(tail -1 $lengths) >> $(readlink /proc/$$/fd/2)
+     echo -e "Median\t"$(awk -v num_seq=$num_seq -v half_num=$half_num \
+     'NR==int(num_seq/2){if(num_seq/2 == int(num_seq/2)) printf "%.1f", ($0+half_num)/2; else printf "%.0f", $0}' $lengths) >> $(readlink /proc/$$/fd/2)
+     echo -e "Mean\t"$(bc <<< "scale=2; $total/$num_seq") >> $(readlink /proc/$$/fd/2)
+     echo -e "GC%\t"$(bc <<< "scale=2; $(cat $1 | tr --delete "[AaTtUu]\n" | wc -m)*100/$(cat $1 | tr --delete "\n" | wc -m)") \
+     >> $(readlink /proc/$$/fd/2)
+     echo -e "L50\t"$(awk -v l50_idx=$l50_idx 'NR==l50_idx{printf "%.0f", $0}' $lengths) >> $(readlink /proc/$$/fd/2)
+     echo -e "N50\t"$l50_idx >> $(readlink /proc/$$/fd/2)
+     echo -e "L90\t"$(awk -v l90_idx=$l90_idx 'NR==l90_idx{printf "%.0f", $0}' $lengths) >> $(readlink /proc/$$/fd/2)
+     echo -e "N90\t"$l90_idx >> $(readlink /proc/$$/fd/2)
+     }
+     
+     # Complementary sequnce function
+     fun_comp(){
+     if test -n "$1"
+      then
+       cat $1
+      else
+       cat -
+      fi |
+     if [[ $MOLECULE = "DNA" ]]
+      then
+       parallel -k -j"$threads" --block 30M --pipe 'tr \"ATCGatcg\" \"TAGCtagc\"'
+      elif [[ $MOLECULE = "RNA" ]]
+      then
+       parallel -k -j"$threads" --block 30M --pipe 'tr \"AUCGaucg\" \"UAGCuagc\"'
+      else
+       echo "Invalid molucule type!" >> $(readlink /proc/$$/fd/2)
+       exit 1
+      fi
+      }
+      
+      # Reverse sequnce function
+      fun_rev(){
+      if test -n "$1"
+      then
+       cat $1
+      else
+       cat -
+      fi |
+      parallel -a $1 -k -j"$threads" --block 30M --pipe 'rev'
+      }
+      
+      # RNA-to-DNA conversion function
+      fun_rna_dna(){
+      if test -n "$1"
+      then
+       cat $1
+      else
+       cat -
+      fi |
+      parallel -k -j"$threads" --block 30M --pipe 'tr \"TtUu\" \"UuTt\"'
       }
 
   # Frame exception
@@ -611,13 +709,17 @@ arg=$1
   fi
   
     # Get input files
-    if [ $# -ge 1 -a -f "$1" ]
+    if test -n "$1"
     then
      FILE="$1"
-    else
+    elif test ! -t 0
+    then
      stdin=1
      FILE=$(mktemp --tmpdir=/tmp fastakit.XXXXXXXXXX)
      cat /dev/stdin > $FILE
+    else
+     echo "Error: No input" >> $(readlink /proc/$$/fd/2)
+     exit 1
     fi
     
     # Detect molecule and exit
@@ -668,12 +770,11 @@ arg=$1
        grep --perl-regexp --invert-match "^>" |
        tr "[:upper:]" "[:lower:]" > $OUTFILE
       
-    fi
+     fi
      if [ ! -z ${verbose+x} ]
      then
       echo -n "Single line conversion done: " >> $(readlink /proc/$$/fd/2)
       show_time $(($(date +%s) - time_start))
-      echo "" >> $(readlink /proc/$$/fd/2)
      fi
      
     # Skip single line conversion
@@ -703,7 +804,6 @@ arg=$1
      then
       echo -n "Loading sequence done: " >> $(readlink /proc/$$/fd/2)
       show_time $(($(date +%s) - time_start))
-      echo "" >> $(readlink /proc/$$/fd/2)
      fi
     fi
     
@@ -712,15 +812,7 @@ arg=$1
      then
      if [ ! -z ${verbose+x} ]; then echo "Converting to multi line FASTA" >> $(readlink /proc/$$/fd/2); fi
      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
-     paste $HEADERS $INFILE |
-     grep --perl-regexp --invert-match "\t$" |
-     tr "\t" "\n" |
-      if [ $(grep --count --perl-regexp --ignore-case "^>.+[ACTGU]{$multi_length}" $HEADERS) -eq 0 ]
-      then
-       sed --regexp-extended "s/\r//g; s/([ACTGUactgu]{$multi_length})/\1\n/g"
-      else
-       awk -F "" -v multi_length="$multi_length" '/>/{print $0}; !/>/{for(i=1; i<=NF; i+=multi_length) {print substr($0,i,multi_length);}}'
-      fi > $OUTFILE
+     multiline $HEADERS $INFILE > $OUTFILE
       # Output to file or stdout
     if [ ! -z ${out+x} ]
     then
@@ -741,7 +833,7 @@ arg=$1
     if [ ! -z ${verbose+x} ]
     then
      echo -ne "\nMulti line conversion done: " >> $(readlink /proc/$$/fd/2)
-     show_time $(($(date +%s) - time_start)) >> $(readlink /proc/$$/fd/2)
+     show_time $(($(date +%s) - time_start))
     fi
     exit 0
     fi
@@ -749,43 +841,23 @@ arg=$1
     if [ ! -z ${nonnuc+x} ]
     then
      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
-     paste <(cat $HEADERS | tr --delete ">") <(cat $INFILE | tr --delete "ACTGUactgu" | awk '{print length($0)}') |
-     grep --invert-match --perl-regexp "\t0"
+     fun_nonnuc $HEADERS $INFILE
      if [ ! -z ${verbose+x} ]
       then
        echo -n "Non-ACTGU done: " >> $(readlink /proc/$$/fd/2)
        show_time $(($(date +%s) - time_start))
-       echo "" >> $(readlink /proc/$$/fd/2)
       fi
      exit 0
     fi
     
     if [ ! -z ${stats+x} ]
     then
-     lengths=$(mktemp --tmpdir=/tmp fastakit.XXXXXXXXXX)
-     awk '{print length($0)}' $OUTFILE | sort -rn > $lengths
-     total=$(awk '{OFS="\t"}; {sum+=$0}; END{printf "%.0f", sum}' $lengths)
-     l50_idx=$(awk '{OFS="\t"}; {sum+=$0}; {printf "%s%s%.0f\n", NR,OFS,sum}' $lengths |
-     awk -v total=$total -F $'\t' '{if($2 > (total*0.5))printf "%.0f\n", $1}' |
-     head -1)
-     l90_idx=$(awk '{OFS="\t"}; {sum+=$0}; {printf "%s%s%.0f\n", NR,OFS,sum}' $lengths |
-     awk -v total=$total -F $'\t' '{if($2 > (total*0.9))printf "%.0f\n", $1}' |
-     head -1)
-     num_seq=$(cat $lengths | wc -l)
-     half_num=$(awk -v num_seq=$num_seq 'NR==(int(num_seq/2)+1){printf $0}' $lengths)
-     echo -e "Total length\t"$total >> $(readlink /proc/$$/fd/2)
-     echo -e "Sequence #\t"$num_seq >> $(readlink /proc/$$/fd/2)
-     echo -e "Longest sequence\t"$(head -1 $lengths) >> $(readlink /proc/$$/fd/2)
-     echo -e "Shortest sequence\t"$(tail -1 $lengths) >> $(readlink /proc/$$/fd/2)
-     echo -e "Median\t"$(awk -v num_seq=$num_seq -v half_num=$half_num \
-     'NR==int(num_seq/2){if(num_seq/2 == int(num_seq/2)) printf "%.1f", ($0+half_num)/2; else printf "%.0f", $0}' $lengths) >> $(readlink /proc/$$/fd/2)
-     echo -e "Mean\t"$(bc <<< "scale=2; $total/$num_seq") >> $(readlink /proc/$$/fd/2)
-     echo -e "GC%\t"$(bc <<< "scale=2; $(cat $OUTFILE | tr --delete "[AaTtUu]\n" | wc -m)*100/$(cat $OUTFILE | tr --delete "\n" | wc -m)") \
-     >> $(readlink /proc/$$/fd/2)
-     echo -e "L50\t"$(awk -v l50_idx=$l50_idx 'NR==l50_idx{printf "%.0f", $0}' $lengths) >> $(readlink /proc/$$/fd/2)
-     echo -e "N50\t"$l50_idx >> $(readlink /proc/$$/fd/2)
-     echo -e "L90\t"$(awk -v l90_idx=$l90_idx 'NR==l90_idx{printf "%.0f", $0}' $lengths) >> $(readlink /proc/$$/fd/2)
-     echo -e "N90\t"$l90_idx >> $(readlink /proc/$$/fd/2)
+     seq_stats $OUTFILE
+     if [ ! -z ${verbose+x} ]
+      then
+       echo -n "Sequence statistics done: " >> $(readlink /proc/$$/fd/2)
+       show_time $(($(date +%s) - time_start))
+      fi
      exit 0
     fi
     
@@ -802,21 +874,11 @@ arg=$1
        echo "Converting to complement sequence" >> $(readlink /proc/$$/fd/2)
       fi
       SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
-      if [[ $MOLECULE = "DNA" ]]
-      then
-       parallel -a $INFILE -k -j"$threads" --block 30M --pipepart 'tr \"ATCGatcg\" \"TAGCtagc\"' > $OUTFILE
-      elif [[ $MOLECULE = "RNA" ]]
-      then
-       parallel -a $INFILE -k -j"$threads" --block 30M --pipepart 'tr \"AUCGaucg\" \"UAGCuagc\"' > $OUTFILE
-      else
-       echo "Invalid molucule type!" >> $(readlink /proc/$$/fd/2)
-       exit 1
-      fi
+      fun_comp $INFILE > $OUTFILE
       if [ ! -z ${verbose+x} ]
       then
        echo -n "Complement conversion done: " >> $(readlink /proc/$$/fd/2)
        show_time $(($(date +%s) - time_start))
-       echo "" >> $(readlink /proc/$$/fd/2)
       fi
      fi
      
@@ -826,50 +888,32 @@ arg=$1
       SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
       if [[ $MOLECULE = "DNA" ]]
       then
-       if [ ! -z ${verbose+x} ]
-       then
-        echo "Converting DNA to RNA sequence" >> $(readlink /proc/$$/fd/2)
-       fi
-       parallel -a $INFILE -k -j"$threads" --block 30M --pipepart 'tr \"Tt\" \"Uu\"' > $OUTFILE
-       if [ ! -z ${verbose+x} ]
-       then
-        echo -n "DNA-to-RNA conversion done: " >> $(readlink /proc/$$/fd/2)
-        show_time $(($(date +%s) - time_start))
-        echo "" >> $(readlink /proc/$$/fd/2)
-       fi
+       if [ ! -z ${verbose+x} ]; then echo "Converting DNA to RNA sequence" >> $(readlink /proc/$$/fd/2); fi
       elif [[ $MOLECULE = "RNA" ]]
       then
-       if [ ! -z ${verbose+x} ]
-       then
-        echo "Converting RNA to DNA sequence" >> $(readlink /proc/$$/fd/2)
-       fi
-       parallel -a $INFILE -k -j"$threads" --block 30M --pipepart 'tr \"Uu\" \"Tt\"' > $OUTFILE
-       if [ ! -z ${verbose+x} ]
-       then
-        echo -n "RNA-to-DNA conversion done: " >> $(readlink /proc/$$/fd/2)
-        show_time $(($(date +%s) - time_start))
-        echo "" >> $(readlink /proc/$$/fd/2)
-       fi
-       else
+       if [ ! -z ${verbose+x} ]; then echo "Converting RNA to DNA sequence" >> $(readlink /proc/$$/fd/2); fi
+      else
        echo "Invalid molucule type!" >> $(readlink /proc/$$/fd/2)
        exit 1
       fi
+      fun_rna_dna $INFILE > $OUTFILE
+      if [ ! -z ${verbose+x} ]
+       then
+        echo -n "DNA/RNA conversion done: " >> $(readlink /proc/$$/fd/2)
+        show_time $(($(date +%s) - time_start))
+       fi
      fi
 
      # Get reverse sequences
      if [ ! -z ${rev_seq+x} ]
      then
-      if [ ! -z ${verbose+x} ]
-      then
-       echo "Converting to reverse sequence" >> $(readlink /proc/$$/fd/2)
-      fi
+      if [ ! -z ${verbose+x} ]; then echo "Converting to reverse sequence" >> $(readlink /proc/$$/fd/2); fi
       SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
-      parallel -a $INFILE -k -j"$threads" --block 30M --pipepart 'rev' > $OUTFILE
+      fun_rev $INFILE > $OUTFILE
       if [ ! -z ${verbose+x} ]
       then
        echo -n "Reverse conversion done: " >> $(readlink /proc/$$/fd/2)
        show_time $(($(date +%s) - time_start))
-       echo "" >> $(readlink /proc/$$/fd/2)
       fi
      fi
      
@@ -877,6 +921,7 @@ arg=$1
      if [ "${#frame[@]}" -ne 1 ] || [ ${frame[0]} -ne 1 ]
      then
      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
+     detect_mol $INFILE
      ADD_frame=$(mktemp --tmpdir=/tmp fastakit.XXXXXXXXXX)
      ADD_headers=$(mktemp --tmpdir=/tmp fastakit.XXXXXXXXXX)
      if [[ "${frame[@]}" =~ 1 ]]
@@ -897,9 +942,8 @@ arg=$1
      if [[ "${frame[@]}" =~ 4 ]] || [[ "${frame[@]}" =~ 5 ]] || [[ "${frame[@]}" =~ 6 ]]
      then
       INFILE_revcomp=$(mktemp --tmpdir=/tmp fastakit.XXXXXXXXXX)
-      parallel -a $INFILE -k -j"$threads" --block 30M --pipepart 'rev' |
-      parallel -k -j"$threads" --block 30M --pipe 'tr \"ATCGUatcgu\" \"TAGCAtagca\"' \
-      > $INFILE_revcomp
+      fun_rev $INFILE |
+      fun_comp > $INFILE_revcomp
       if [[ "${frame[@]}" =~ 4 ]]
       then
        cat $INFILE_revcomp >> $ADD_frame
@@ -1277,13 +1321,11 @@ arg=$1
      then
       echo -n "ORF detection done: " >> $(readlink /proc/$$/fd/2)
       show_time $(($(date +%s) - time_start))
-      echo "" >> $(readlink /proc/$$/fd/2)
      fi
      if [ ! -z ${verbose+x} ] && [ ! -z ${translate+x} ]
      then
       echo -n "ORF detection and translation done: " >> $(readlink /proc/$$/fd/2)
       show_time $(($(date +%s) - time_start))
-      echo "" >> $(readlink /proc/$$/fd/2)
      fi
     fi
     
@@ -1334,9 +1376,21 @@ arg=$1
        then
         echo -n "Translation done: " >> $(readlink /proc/$$/fd/2)
         show_time $(($(date +%s) - time_start))
-        echo "" >> $(readlink /proc/$$/fd/2)
        fi
     fi
+    
+    # Randomize sequences
+    if [ ! -z ${random+x} ]
+     then
+      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
+      detect_mol $INFILE
+      random $INFILE > $OUTFILE
+      if [ ! -z ${verbose+x} ]
+      then
+       echo -n "Random sequence done: " >> $(readlink /proc/$$/fd/2)
+       show_time $(($(date +%s) - time_start))
+      fi
+     fi
     
      # Combine headers and sequences
      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
@@ -1368,19 +1422,6 @@ arg=$1
       fi
      fi
      
-     # Randomize sequences
-    if [ ! -z ${random+x} ]
-     then
-      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
-      random $INFILE > $OUTFILE
-      if [ ! -z ${verbose+x} ]
-      then
-       echo -n "Random sequence done: " >> $(readlink /proc/$$/fd/2)
-       show_time $(($(date +%s) - time_start))
-       echo "" >> $(readlink /proc/$$/fd/2)
-      fi
-     fi
-     
      # Sort by name
      if [ ! -z ${name_sort+x} ]
      then
@@ -1403,7 +1444,6 @@ arg=$1
       then
        echo -n "Name sort done: " >> $(readlink /proc/$$/fd/2)
        show_time $(($(date +%s) - time_start))
-       echo "" >> $(readlink /proc/$$/fd/2)
       fi
      fi
     
@@ -1431,7 +1471,6 @@ arg=$1
       then
        echo -n "Length sort done: " >> $(readlink /proc/$$/fd/2)
        show_time $(($(date +%s) - time_start))
-       echo "" >> $(readlink /proc/$$/fd/2)
       fi
      fi
      
@@ -1448,7 +1487,6 @@ arg=$1
       then
        echo -n "GC fraction done: " >> $(readlink /proc/$$/fd/2)
        show_time $(($(date +%s) - time_start))
-       echo "" >> $(readlink /proc/$$/fd/2)
       fi
       exit 0
      fi
@@ -1472,7 +1510,6 @@ arg=$1
       then
        echo -n "Molecular weight done: " >> $(readlink /proc/$$/fd/2)
        show_time $(($(date +%s) - time_start))
-       echo "" >> $(readlink /proc/$$/fd/2)
       fi
       exit 0
     fi
@@ -1495,7 +1532,6 @@ arg=$1
       then
        echo -n "Restriction site detection done: " >> $(readlink /proc/$$/fd/2)
        show_time $(($(date +%s) - time_start))
-       echo "" >> $(readlink /proc/$$/fd/2)
       fi
       exit 0
      fi
@@ -1546,5 +1582,5 @@ arg=$1
     if [ ! -z ${verbose+x} ]
     then
      echo -ne "\nfastakit done: " >> $(readlink /proc/$$/fd/2)
-     show_time $(($(date +%s) - time_start)) >> $(readlink /proc/$$/fd/2)
+     show_time $(($(date +%s) - time_start))
     fi
