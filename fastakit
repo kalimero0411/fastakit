@@ -1202,12 +1202,18 @@ if [[ $(grep --count --perl-regexp "^>" $FILE) != $(grep --count --perl-regexp -
      else
       awk -F $'\t' -v min_seq_length="${seq_range[0]}" -v max_seq_length="${seq_range[1]}" '{OFS="\t"};
       {headers=$1}; {gsub(/_orf[0-9]+/,"",$1)}; {gsub(/_frame[0-9]+/,"",$1)};
-      $2 ~ 1{if( $5-$4 >= min_seq_length && ($5-$4 <= max_seq_length || max_seq_length == 0)){print $1,$4,$5,$5-$4,headers,0,"+",$4,$5,"0,128,255"}
-      $2 ~ 2{if( $5-$4 >= min_seq_length && ($5-$4 <= max_seq_length || max_seq_length == 0)){print $1,$4+1,$5+1,$5-$4,headers,0,"+",$4+1,$5+1,"0,164,255"}
-      $2 ~ 3{if( $5-$4 >= min_seq_length && ($5-$4 <= max_seq_length || max_seq_length == 0)){print $1,$4+2,$5+2,$5-$4,headers,0,"+",$4+2,$5+2,"0,200,255"}
-      $2 ~ 4{if( $5-$4 >= min_seq_length && ($5-$4 <= max_seq_length || max_seq_length == 0)){print $1,$3-$5,$3-$4,$5-$4,headers,0,"-",$3-$5,$3-$4,"255,128,0"}
-      $2 ~ 5{if( $5-$4 >= min_seq_length && ($5-$4 <= max_seq_length || max_seq_length == 0)){print $1,$3-$5+1,$3-$4+1,$5-$4,headers,0,"-",$3-$5+1,$3-$4+1,"255,164,0"}
-      $2 ~ 6{if( $5-$4 >= min_seq_length && ($5-$4 <= max_seq_length || max_seq_length == 0)){print $1,$3-$5+2,$3-$4+2,$5-$4,headers,0,"-",$3-$5+2,$3-$4+2,"255,200,0"}' $INFILE
+      $2 ~ 1{if( $5-$4 >= min_seq_length && ($5-$4 <= max_seq_length || max_seq_length == 0)){
+      print $1,$4,$5,$5-$4,headers,0,"+",$4,$5,"0,128,255"}}
+      $2 ~ 2{if( $5-$4 >= min_seq_length && ($5-$4 <= max_seq_length || max_seq_length == 0)){
+      print $1,$4+1,$5+1,$5-$4,headers,0,"+",$4+1,$5+1,"0,164,255"}}
+      $2 ~ 3{if( $5-$4 >= min_seq_length && ($5-$4 <= max_seq_length || max_seq_length == 0)){
+      print $1,$4+2,$5+2,$5-$4,headers,0,"+",$4+2,$5+2,"0,200,255"}}
+      $2 ~ 4{if( $5-$4 >= min_seq_length && ($5-$4 <= max_seq_length || max_seq_length == 0))
+      {print $1,$3-$5,$3-$4,$5-$4,headers,0,"-",$3-$5,$3-$4,"255,128,0"}}
+      $2 ~ 5{if( $5-$4 >= min_seq_length && ($5-$4 <= max_seq_length || max_seq_length == 0)){
+      print $1,$3-$5+1,$3-$4+1,$5-$4,headers,0,"-",$3-$5+1,$3-$4+1,"255,164,0"}}
+      $2 ~ 6{if( $5-$4 >= min_seq_length && ($5-$4 <= max_seq_length || max_seq_length == 0)){
+      print $1,$3-$5+2,$3-$4+2,$5-$4,headers,0,"-",$3-$5+2,$3-$4+2,"255,200,0"}}' $INFILE
      fi |
      if [ ! -z $max_seq ]
      then
