@@ -15,24 +15,24 @@ fastakit [OPTIONS] [Sequence.fasta | stdin]
 	-r | --reverse_sort	Sort in reverse order
 	--upper	Sequences to uppercase
 	--lower	Sequences to lowercase
-	-g | --orf	Sequence from first ATG in frame
+	-g | --orf	Retrieve ORFs
 	--max_orf_num #	Maximum number of ORFs to output per sequence
 	-p | --translate	Protein sequences in current frame
 	--table #	Translation code (Default = standard code)
 	--frame #	Frame to extract codons (Any of frames 1,2,3,4,5,6; 0 = six frames; Default = 1)
-	--min_prot #	Minimum protein size (Assumes --translate)
 	--gc	Calculate percent GC per sequence (Disables --translate)
 	--mw	Calculate the moleculare weight of DNA/RNA/protein per sequence (ss ds)
 	--separate DIR	Separate sequnces into files in directory DIR
 	--nonnuc	Non-ACTGU characters (0 ignored)
 	--rna_dna	Convert RNA to DNA / DNA to RNA (Default = no conversion)
-	--min_max_seq #,#	Minimum/Maximum sequence size (e.g. 10,50 ; 0 to ignore)
-	--maxseq Return the # of largest sequences for each input sequence (ORFs, proteins, etc.)
+	--seq_range #,#	Minimum/Maximum sequence size (e.g. 10,50 ; 0 to ignore)
+	--max_seq Return the # of largest sequences for each input sequence (ORFs, proteins, etc.)
 	--check	Check if FASTA file is single line
-	--fullorf	Return only ORFs/proteins with start and stop codons
-	--makebed	Create BED output for ORFs (Assumes --orf and --fullorf)
+	--makebed	Create BED output for ORFs (Assumes --orf)
+	--upstream #	Retrieve # size upstream flanking sequence of ORFs (Assumes --orf)
+	--downstream #	Retrieve # size downstream flanking sequence of ORFs (Assumes --orf)
 	--detect	Detect molucule and exit
-	--re string,#,#,#,#	Detect restriction enzyme recognition sites (Restriction enzyme name, min_length, max_length, min_sites, max_sites; 0 to ignore; 'list' to list all enzymes)
+	--re string,#,#,#,#	Detect restriction enzyme recognition sites (Restriction enzyme name, min_length, max_length, min_number, max_number; 0 to ignore; 'list' to list all enzymes)
 	-t | --threads #	Number of CPU threads to use (Default = Detected processors or 1)
 	-v | --verbose	Verbose
 	-h | --help	Display help
@@ -48,18 +48,16 @@ fastakit [OPTIONS] [Sequence.fasta | stdin]
 	
 ```
 
-- The `--orf` option divides each sequence into individual ORFs from a start to a stop codon in the current frame, or until the end of the sequence.
+- The `-g | --orf` option divides each sequence into individual ORFs from a start to a stop codon in the current frame, or until the end of the sequence.
 - The `--frame` option can take multiple inputs of numbers 1-6 seperated by a comma, or number 0 which is equivilant to 1,2,3,4,5,6.
-- The `--translate` option applies to each ORF only if `--orf` is selected, otherwise it applies to the entire sequence in the current frame, regardless of start/stop codons.
-- The `--length_sort` option applies after ORFs are retrieved and/or sequences are translated.
-- If you want the reverse complement, use `--complement` and `--reverse_seq`.
-- The `--min_max_seq` option applies to the nucleic acid sequences.
-- The `--min_max_seq` option together with `--translate` applies the `--min_prot` option for the respective minimum protein size (i.e. (minimum / 3) - 1).
-- The `--check` option return exit code 0 if the FASTA file is single-line.
-- The `--mw` option detects DNA/RNA/protein sequences, and ouputs the average molecular weight of ssDNA/sRNA and dsDNA/dsRNA seperated by a tab or protein average molecular weight.
-- The `--re` option detects restriction enzyme recognition sites, but **IGNORES** cut sites and methylation sensitivity. The inputs for this option are a restriction enzyme name,
-	minimum and maximum length of recognition site, and minimum and maximum number of detected sites; seperated by a comma (e.g. HpaII,0,0,1,2). Each parametercaan be ignored with 0.
+- The `-p | --translate` option applies to each ORF only if `--orf` is selected, otherwise it applies to the entire sequence, regardless of start/stop codons.
+- The `-l | --length_sort` option applies after ORFs are retrieved and/or sequences are translated.
+- If you want the reverse complement, use `-c | --complement` and `-m | --reverse_seq`.
+- The `--seq_range` option applies to the nucleic acid sequences or protein sequences (excluding the stop character).
+- The `--check` option returns exit code 0 if the FASTA file is single-line.
+- The `--mw` option detects DNA/RNA/Protein sequences, and outputs the average molecular weight of ssDNA/ssRNA and dsDNA/dsRNA seperated by a tab or protein average molecular weight.
+- The `--re` option detects restriction enzyme recognition sites, but **IGNORES** cut sites and methylation sensitivity. The inputs for this option are a restriction enzyme name, minimum and maximum length of recognition site, and minimum and maximum number of detected sites; seperated by a comma (e.g. HpaII,0,0,1,2). Each parameter can be ignored with 0.
 - If `--re` is given a restriction enzyme name (i.e. not 0), the restrictions for recognition site length are removed.
-- The `--random` option applies after all other sequence manipulation processes.
-- The `--makebed` option enables `--orf` and `--fullorf`, and disables `--translate` and `--min_prot`, by default. Works with `--min_max_seq` and `--maxseq`.
 - Selecting `--re list` gives a list of all possible enzymes.
+- The `--random` option applies after all other sequence manipulation processes.
+- The `--makebed` option enables `--orf` and disables `--translate`. Works with `--seq_range` and `--max_seq`.
