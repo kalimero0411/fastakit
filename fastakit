@@ -719,70 +719,67 @@ arg=$1
         if [ ! -z ${upstream+x} ]
         then
          awk -F $'\t' -v max_orf_num="${max_orf_num:0}" -v upstream="$upstream" -v orf_core="$orf_core" -v ORFend=$ORFend -v verbose=$verbose \
-         '{OFS="\t"; IGNORECASE=1; len=split($2,seq,"a[tu]g|[tu][ag]a|[tu]ag",sep); orf=1; x=1; last=0;
+         '{OFS="\t"; IGNORECASE=1; len=split($2,seq,"a[tu]g|[tu][ag]a|[tu]ag",sep); orf=1; seek=0;
          if(FNR % 1000 && orf_core == 0 && verbose == 1){printf ("Getting ORFs: %d%\r", 100*FNR/ORFend) > "/dev/tty"};
          if(FNR == ORFend && orf_core == 0 && verbose == 1) print "" > "/dev/tty";
-         for(i in sep) { if(sep[i] ~ /[tu][ag]a|[tu]ag/) last=i};
          for(i in seq) {
-         if(i <= last && (max_orf_num == 0 || orf <= max_orf_num)){
-         if(sep[i] ~ /a[tu]g/ && x == 1) {
-         move=1; flank=sep[i-move] seq[i]; gsub(" ","",flank); len=length(flank);
-         while(len < upstream && (i - move) >= 1){
-         flank=sep[i-move] seq[i-move] flank;
-         gsub(" ","",flank);
+         if(max_orf_num == 0 || orf <= max_orf_num){
+         if(sep[i] ~ /a[tu]g/ && seek == 0) {
+         move=1; flank=sep[i-move] seq[i]; gsub(" ","",flank); len_flank=length(flank);
+         while(len_flank < upstream && (i - move) >= 1){
          move++;
-         len=length(flank)
+         flank=sep[i-move] seq[i-move+1] flank;
+         gsub(" ","",flank);
+         len_flank=length(flank)
          };
          print $1"_orf"orf,substr(flank,length(flank) - upstream + 1);
-         orf++; x=2}
+         orf++; seek=1}
          else{
-         if(sep[i] ~ /[tu][ag]a|[tu]ag/ && sep[i-1] ~ /a[tu]g/ && i >= 2) {x=1}
+         if(sep[i] ~ /[tu][ag]a|[tu]ag/) {seek=0}
          }
          }}}'
         elif [ ! -z ${downstream+x} ]
         then
          awk -F $'\t' -v max_orf_num="${max_orf_num:0}" -v downstream="$downstream" -v orf_core="$orf_core" -v ORFend=$ORFend -v verbose=$verbose \
-         '{OFS="\t"; IGNORECASE=1; len=split($2,seq,"a[tu]g|[tu][ag]a|[tu]ag",sep); orf=1; x=1; last=0;
+         '{OFS="\t"; IGNORECASE=1; len=split($2,seq,"a[tu]g|[tu][ag]a|[tu]ag",sep); orf=1; seek=0;
          if(FNR % 1000 && orf_core == 0 && verbose == 1){printf ("Getting ORFs: %d%\r", 100*FNR/ORFend) > "/dev/tty"};
          if(FNR == ORFend && orf_core == 0 && verbose == 1) print "" > "/dev/tty";
-         for(i in sep) { if(sep[i] ~ /[tu][ag]a|[tu]ag/) last=i};
          for(i in seq) {
-         if(i <= last && (max_orf_num == 0 || orf <= max_orf_num)){
-         if(sep[i] ~ /a[tu]g/ && x == 1) {
-         x=2};
-         if(sep[i] ~ /[tu][ag]a|[tu]ag/ && x == 2) {
-         move=1; flank=seq[i+move] sep[i+move]; gsub(" ","",flank); len=length(flank);
-         while(len < downstream && (i + move) <= len){
+         if(max_orf_num == 0 || orf <= max_orf_num){
+         if(sep[i] ~ /a[tu]g/ && seek == 0) {
+         seek=1};
+         if(sep[i] ~ /[tu][ag]a|[tu]ag/ && seek == 1) {
+         move=1; flank=seq[i+move] sep[i+move]; gsub(" ","",flank); len_flank=length(flank);
+         while(len_flank < downstream && (i + move) <= len){
          move++;
          flank=flank seq[i+move] sep[i+move];
          gsub(" ","",flank);
-         len=length(flank)
+         len_flank=length(flank)
          };
          print $1"_orf"orf,substr(flank,1,downstream);
-         orf++; x=1}
+         orf++; seek=0}
          else{
-         if(sep[i] ~ /[tu][ag]a|[tu]ag/ && sep[i-1] ~ /a[tu]g/ && i >= 2) {x=1}
+         if(sep[i] ~ /[tu][ag]a|[tu]ag/ && sep[i-1] ~ /a[tu]g/ && i >= 2) {seek=0}
          }
          }}}'
         else
          awk -F $'\t' -v max_orf_num="${max_orf_num:0}" -v orf_core="$orf_core" -v ORFend=$ORFend -v verbose=$verbose \
-         '{OFS="\t"; IGNORECASE=1; len=split($2,seq,"a[tu]g|[tu][ag]a|[tu]ag",sep); orf=1; x=1; last=0;
+         '{OFS="\t"; IGNORECASE=1; len=split($2,seq,"a[tu]g|[tu][ag]a|[tu]ag",sep); orf=1; seek=0;
          if(FNR % 1000 && orf_core == 0 && verbose == 1){printf ("Getting ORFs: %d%\r", 100*FNR/ORFend) > "/dev/tty"};
          if(FNR == ORFend && orf_core == 0 && verbose == 1) print "" > "/dev/tty";
-         for(i in sep) { if(sep[i] ~ /[tu][ag]a|[tu]ag/) last=i};
          for(i in seq) {
-         if(i <= last && (max_orf_num == 0 || orf <= max_orf_num)){
-         if(sep[i] ~ /a[tu]g/ && x == 1) {print $1"_orf"orf,sep[i]seq[i+1]; orf++; x=2}
+         if(max_orf_num == 0 || orf <= max_orf_num){
+         if(sep[i] ~ /a[tu]g/ && seek == 0) {print $1"_orf"orf,sep[i]seq[i+1]; orf++; seek=1}
          else{
-         if(sep[i] ~ /a[tu]g/) {print "",sep[i]seq[i+1]};
-         if(sep[i] ~ /[tu][ag]a|[tu]ag/ && sep[i-1] ~ /a[tu]g/ && i >= 2) {print "",sep[i]; x=1};
+         if(sep[i] ~ /a[tu]g/ && seek == 1) {print sep[i]seq[i+1]};
+         if(sep[i] ~ /[tu][ag]a|[tu]ag/ && seek == 1) {print sep[i]; seek=0};
          }}}}'
         fi |
+        tr "\t" "\n" |
         tee $ORFFILE2 |
-        cut --fields=1 |
-        grep --perl-regexp --invert-match "^$" > ${!headcore_orf}
-        sed --regexp-extended 's/(>.+?)\t/\1\n/g; s/\t//g' $ORFFILE2 |
-        perl -pe '$. > 1 and /^>/ ? print "\n" : chomp' |
+        grep ">" > ${!headcore_orf}
+        perl -pe '$. > 1 and /^>/ ? print "\n" : chomp' $ORFFILE2 |
+        tr --delete " " |
         grep --perl-regexp --invert-match "^>" |
         if [ ! -z ${translate+x} ]
         then
