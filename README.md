@@ -3,7 +3,6 @@ A bash script for FASTA sequence formatting and modification.
 
 ```
 fastakit [OPTIONS] [Sequence.fasta | stdin]
-	-o | --out	Output to file (otherwise to stdout)
 	-i | --in-place	Modify file in-place
 	-c | --complement	Complementary sequence
 	-m | --reverse_seq	Reverse sequence
@@ -38,6 +37,8 @@ fastakit [OPTIONS] [Sequence.fasta | stdin]
 	-h | --help	Display help
 	--stats	Calculate basic stats
 	--version	Print version date
+	
+	Example: fastakit --orf --frame 0 --seq_range 100,1000 --length-sort sequences.fasta > orfs.fasta
 
 
 	Available translation codes:
@@ -49,11 +50,12 @@ fastakit [OPTIONS] [Sequence.fasta | stdin]
 ```
 
 - The `-g | --orf` option divides each sequence into individual ORFs from a start to a stop codon in the current frame, or until the end of the sequence.
+- The `-i | --in-place` is not selected, all output is to stdout by default.
 - The `--frame` option can take multiple inputs of numbers 1-6 seperated by a comma, or number 0 which is equivilant to 1,2,3,4,5,6.
 - The `-p | --translate` option applies to each ORF only if `--orf` is selected, otherwise it applies to the entire sequence, regardless of start/stop codons.
 - The `-l | --length_sort` option applies after ORFs are retrieved and/or sequences are translated.
 - If you want the reverse complement, use `-c | --complement` and `-m | --reverse_seq`.
-- The `--seq_range` option applies to the nucleic acid sequences or protein sequences (excluding the stop character).
+- The `--seq_range` option applies to the nucleic acid sequences or protein sequences (excluding the protein stop character).
 - The `--check` option returns exit code 0 if the FASTA file is single-line.
 - The `--mw` option detects DNA/RNA/Protein sequences, and outputs the average molecular weight of ssDNA/ssRNA and dsDNA/dsRNA seperated by a tab or protein average molecular weight.
 - The `--re` option detects restriction enzyme recognition sites, but **IGNORES** cut sites and methylation sensitivity. The inputs for this option are a restriction enzyme name, minimum and maximum length of recognition site, and minimum and maximum number of detected sites; seperated by a comma (e.g. HpaII,0,0,1,2). Each parameter can be ignored with 0.
