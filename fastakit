@@ -35,7 +35,7 @@ fastakit [OPTIONS] [Sequence.fasta | stdin]
 	-g | --orf	Retrieve ORFs
 	--max_orf_num #	Maximum number of ORFs to output per sequence
 	-p | --translate	Protein sequences in current frame
-	--table #	Translation code (Default = standard code)
+	--table #	Translation code (Default = standard code; '--table list' for all available codes)
 	--frame #	Frame to extract codons (Any of frames 1,2,3,4,5,6; 0 = six frames; Default = 1)
 	--gc	Calculate percent GC per sequence (Disables --translate)
 	--mw	Calculate the moleculare weight of DNA/RNA/protein per sequence (ss ds)
@@ -57,13 +57,6 @@ fastakit [OPTIONS] [Sequence.fasta | stdin]
 	--version	Print version date
 	
 	Example: fastakit --orf --frame 0 --seq_range 100,1000 --length-sort sequences.fasta > orfs.fasta
-
-
-	Available translation codes:
-	1 - Standard code
-	2 - Vertebrate Mitochondrial code
-	3 - Yeast mitochondrial code
-	4 - Mold, protozoan, and coelenterate mitochondrial code and the mycoplasma/spiroplasma code
 	
 "
 }
@@ -147,6 +140,42 @@ arg=$1
   ;;
   --table)
   translate_table=$2 # Alternative translation table
+  tables=(1 2 3 4 5 6 9 10 11 12 13 14 16 21 22 23 24 25 26 27 28 29 30 31 33)
+
+  if [[ ! "${IFS}${table[*]}${IFS}" =~ "${IFS}$translate_table${IFS}" ]]
+  then
+   printf "
+    Available translation codes:
+    
+    1 - Standard code
+    2 - Vertebrate Mitochondrial code
+    3 - Yeast mitochondrial code
+    4 - Mold, protozoan, and coelenterate mitochondrial code and the mycoplasma/spiroplasma code
+    5 - Invertebrate Mitochondrial Code
+    6 - Ciliate, Dasycladacean and Hexamita Nuclear Code
+    9 - Echinoderm and Flatworm Mitochondrial Code
+    10 - Euplotid Nuclear Code
+    11 - Bacterial, Archaeal and Plant Plastid Code
+    12 - Alternative Yeast Nuclear Code
+    13 - Ascidian Mitochondrial Code
+    14 - Alternative Flatworm Mitochondrial Code
+    16 - Chlorophycean Mitochondrial Code
+    21 - Trematode Mitochondrial Code
+    22 - Scenedesmus obliquus Mitochondrial Code
+    23 - Thraustochytrium Mitochondrial Code
+    24 - Rhabdopleuridae Mitochondrial Code
+    25 - Candidate Division SR1 and Gracilibacteria Code
+    26 - Pachysolen tannophilus Nuclear Code
+    27 - Karyorelict Nuclear Code
+    28 - Condylostoma Nuclear Code
+    29 - Mesodinium Nuclear Code
+    30 - Peritrich Nuclear Code
+    31 - Blastocrithidia Nuclear Code
+    33 - Cephalodiscidae Mitochondrial UAA-Tyr Code
+    
+"
+   exit 1
+  fi
   shift 2
   ;;
   --max_seq)
@@ -290,47 +319,18 @@ arg=$1
   function translate(){
 	input=$1 &&
 	cat $input |
-	sed --regexp-extended \
-        's/a[tu]g/M/gi;
-         s/a[tu][tuc]/I/gi;
-         s/ac[actug]/T/gi;
-         s/aa[tuc]/N/gi;
-         s/aa[ag]/K/gi;
-         s/ag[tuc]/S/gi;
-         s/[tu][tu][tuc]/F/gi;
-         s/[tu][tu][ag]/L/gi;
-         s/[tu]c[acgtu]/S/gi;
-         s/[tu]a[tuc]/Y/gi;
-         s/[tu]a[ag]/*/gi;
-         s/[tu]g[tuc]/C/gi;
-         s/[tu]gg/W/gi;
-         s/cc[acgtu]/P/gi;
-         s/ca[tuc]/H/gi;
-         s/ca[ag]/Q/gi;
-         s/cg[gtu]/R/gi;
-         s/g[tu][acgtu]/V/gi;
-         s/gc[acgtu]/A/gi;
-         s/ga[tcu]/D/gi;
-         s/ga[ag]/E/gi;
-         s/gg[acgtu]/G/gi' |
+	
+	 # Standard code
+	 if [[ $translate_table = 1 ]]
+	 then
+	  cat
          
-         # Standard code
-         if [[ $translate_table = 1 ]]
-         then
-          sed --regexp-extended \
-           's/a[tu]a/I/gi;
-            s/ag[ag]/R/gi;
-            s/c[tu][acgtu]/L/gi;
-            s/cg[ac]/R/gi;
-            s/[tu]ga/*/gi;'
-       
          # Vertebrate mitochondrial code
          elif [[ $translate_table = 2 ]]
          then
           sed --regexp-extended \
            's/a[tu]a/M/gi;
             s/ag[ag]/*/gi;
-            s/c[tu][acgtu]/L/gi;
             s/cg[ac]/R/gi;
             s/[tu]ga/W/gi;'
        
@@ -339,25 +339,196 @@ arg=$1
           then
           sed --regexp-extended \
            's/a[tu]a/M/gi;
-            s/ag[ag]/R/gi;
-            s/c[tu][acgtu]/T/gi;
-            s/cg[ac]/X/gi;
+            s/c[tu][acgtun]/T/gi;
             s/[tu]ga/W/gi;'
        
          # Mold, protozoan, and coelenterate mitochondrial code and the mycoplasma/spiroplasma code
          elif [[ $translate_table = 4 ]]
           then
            sed --regexp-extended \
-            's/a[tu]a/I/gi;
-             s/ag[ag]/R/gi;
-             s/c[tu][acgtu]/L/gi;
-             s/cg[ac]/R/gi;
-             s/[tu]ga/M/gi;'
-          else
-           echo "Error: Unknown translation code"
-           tables
-           exit 1
-         fi
+            's/[tu]ga/M/gi;'
+          
+         # Invertebrate Mitochondrial Code
+          elif [[ $translate_table = 5 ]]
+          then
+           sed --regexp-extended \
+            's/ag[ag]/S/gi;
+             s/a[tu]a/M/gi;
+             s/[tu]ga/W/gi'
+          
+         # Ciliate, Dasycladacean and Hexamita Nuclear Code
+          elif [[ $translate_table = 6 ]]
+          then
+           sed --regexp-extended \
+            's/[tu]a[ag]/Q/gi'
+          
+            
+         # Echinoderm and Flatworm Mitochondrial Code
+         elif [[ $translate_table = 9 ]]
+          then
+           sed --regexp-extended \
+            's/aaa/N/gi;
+             s/ag[ag]/S/gi;
+             s/[tu]ga/W/gi'
+             
+         # Euplotid Nuclear Code
+          elif [[ $translate_table = 10 ]]
+          then
+           sed --regexp-extended \
+            's/[tu]ga/C/gi'
+            
+         # Bacterial, Archaeal and Plant Plastid Code
+          elif [[ $translate_table = 11 ]]
+          then
+           cat
+         
+         # Alternative Yeast Nuclear Code
+          elif [[ $translate_table = 12 ]]
+          then
+           sed --regexp-extended \
+            's/c[tu]g/S/gi'
+            
+          # Ascidian Mitochondrial Code
+          elif [[ $translate_table = 13 ]]
+          then
+           sed --regexp-extended \
+            's/ag[ag]/G/gi;
+             s/a[tu]a/M/gi;
+             s/[tu]ga/W/gi'
+             
+          # Alternative Flatworm Mitochondrial Code
+          elif [[ $translate_table = 14 ]]
+          then
+           sed --regexp-extended \
+            's/aaa/N/gi;
+             s/ag[ag]/S/gi;
+             s/[tu]aa/Y/gi;
+             s/[tu]ga/W/gi'
+          
+          # Chlorophycean Mitochondrial Code
+          elif [[ $translate_table = 16 ]]
+          then
+           sed --regexp-extended \
+            's/[tu]ag/L/gi'
+            
+          # Trematode Mitochondrial Code
+          elif [[ $translate_table = 21 ]]
+          then
+           sed --regexp-extended \
+            's/[tu]ga/W/gi;
+             s/a[tu]a/M/gi;
+             s/ag[ag]/S/gi;
+             s/aaa/N/gi'
+             
+          # Scenedesmus obliquus Mitochondrial Code
+          elif [[ $translate_table = 22 ]]
+          then
+           sed --regexp-extended \
+            's/[tu]ca/*/gi;
+             s/[tu]ag/L/gi'
+             
+          # Thraustochytrium Mitochondrial Code
+          elif [[ $translate_table = 23 ]]
+          then
+           cat
+           
+          # Rhabdopleuridae Mitochondrial Code
+          elif [[ $translate_table = 24 ]]
+          then
+           sed --regexp-extended \
+            's/aga/S/gi;
+             s/agg/K/gi;
+             s/[tu]ga/W/gi'
+          
+          # Candidate Division SR1 and Gracilibacteria Code
+          elif [[ $translate_table = 25 ]]
+          then
+           sed --regexp-extended \
+            's/[tu]ga/G/gi'
+            
+          # Pachysolen tannophilus Nuclear Code
+          elif [[ $translate_table = 26 ]]
+          then
+           sed --regexp-extended \
+            's/c[tu]g/A/gi'
+            
+          # Karyorelict Nuclear Code
+          # TODO UGA STOP or Trp
+          elif [[ $translate_table = 27 ]]
+          then
+           sed --regexp-extended \
+            's/[tu]a[ag]/Q/gi;
+             s/[tu]ga/W/gi'
+             
+          # Condylostoma Nuclear Code
+          # TODO UGA/UAA/UAG STOP or Trp/Gln
+          elif [[ $translate_table = 28 ]]
+          then
+           sed --regexp-extended \
+            's/[tu]a[ag]/Q/gi;
+             s/[tu]ga/W/gi'
+             
+          # Mesodinium Nuclear Code
+          elif [[ $translate_table = 29 ]]
+          then
+           sed --regexp-extended \
+            's/[tu]a[ag]/Y/gi'
+            
+          # Peritrich Nuclear Code
+          elif [[ $translate_table = 30 ]]
+          then
+           sed --regexp-extended \
+            's/[tu]a[ag]/E/gi'
+            
+          # Blastocrithidia Nuclear Code
+          # TODO UAG/UAA STOP or Glu
+          elif [[ $translate_table = 31 ]]
+          then
+           sed --regexp-extended \
+            's/[tu]a[ag]/E/gi;
+             s/[tu]ga/W/gi'
+             
+          # Cephalodiscidae Mitochondrial UAA-Tyr Code
+          elif [[ $translate_table = 33 ]]
+          then
+           sed --regexp-extended \
+            's/[tu]aa/Y/gi;
+             s/[tu]ga/W/gi;
+             s/aga/S/gi;
+             s/agg/K/gi'
+             
+         fi |
+         
+         # Standard code
+         sed --regexp-extended \
+         's/a[tu]g/M/gi;
+          s/a[tu][tuc]/I/gi;
+          s/ac[actugn]/T/gi;
+          s/aa[tuc]/N/gi;
+          s/aa[ag]/K/gi;
+          s/ag[tuc]/S/gi;
+          s/[tu][tu][tuc]/F/gi;
+          s/[tu][tu][ag]/L/gi;
+          s/[tu]c[acgtun]/S/gi;
+          s/[tu]a[tuc]/Y/gi;
+          s/[tu]a[ag]/*/gi;
+          s/[tu]g[tuc]/C/gi;
+          s/[tu]gg/W/gi;
+          s/cc[acgtun]/P/gi;
+          s/ca[tuc]/H/gi;
+          s/ca[ag]/Q/gi;
+          s/cg[gtu]/R/gi;
+          s/g[tu][acgtun]/V/gi;
+          s/gc[acgtun]/A/gi;
+          s/ga[tcu]/D/gi;
+          s/ga[ag]/E/gi;
+          s/gg[acgtun]/G/gi;
+          s/a[tu]a/I/gi;
+          s/ag[ag]/R/gi;
+          s/c[tu][acgtun]/L/gi;
+          s/cg[ac]/R/gi;
+          s/[tu]ga/*/gi'
+          
          MOLECULE="PROTEIN"
 }
   
@@ -433,7 +604,7 @@ arg=$1
      function detect_mol(){
      local input=$(mktemp --tmpdir=/tmp fastakit$script_pid.XXXXXXXXXX)
      head --bytes=5000000 $1 > $input
-     if $(awk '{IGNORECASE=1; seq=length($0); gsub("[actgun]","",$0)}; length($0)/seq > 0.25{exit 1}' $input)
+     if $(awk '{IGNORECASE=1; seq=length($0); gsub("[actgun]","",$0)}; length($0)/seq > 0.05{exit 1}' $input)
      then
       export MOL=$(mktemp --tmpdir=/tmp fastakit$script_pid.XXXXXXXXXX)
       export input
@@ -775,7 +946,6 @@ arg=$1
         tee $ORFFILE2 |
         grep ">" > ${!headcore_orf}
         perl -pe '$. > 1 and /^>/ ? print "\n" : chomp' $ORFFILE2 |
-        tr --delete " " |
         grep --perl-regexp --invert-match "^>" |
         if [ ! -z ${translate+x} ]
         then
