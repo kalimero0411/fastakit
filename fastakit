@@ -2,7 +2,7 @@
 #set -x
 
 # Default parameters
-version=22.09.1
+version=22.10
 time_start=$(date +%s)
 threads=$(command -v nproc --all &> /dev/null && nproc || echo 1)
 lettercase=0
@@ -49,7 +49,8 @@ fastakit [OPTIONS] [Sequence.fasta | stdin]
 	--upstream #	Retrieve # size upstream flanking sequence of ORFs (Assumes --orf)
 	--downstream #	Retrieve # size downstream flanking sequence of ORFs (Assumes --orf)
 	--detect	Detect molucule and exit
-	--re string,#,#,#,#	Detect restriction enzyme recognition sites (Restriction enzyme name, min_length, max_length, min_number, max_number; 0 to ignore; 'list' to list all enzymes)
+	--rename {string}	Change all sequence names to {string}_# (e.g. '--rename test', will give '>test_1' etc.)
+	--re {string},#,#,#,#	Detect restriction enzyme recognition sites (Restriction enzyme name, min_length, max_length, min_number, max_number; 0 to ignore; 'list' to list all enzymes)
 	-t | --threads #	Number of CPU threads to use (Default = Detected processors or 1)
 	-v | --verbose	Verbose
 	-h | --help	Display help
@@ -147,10 +148,10 @@ arg=$1
    printf "
     Available translation codes:
     
-    1 - Standard code
-    2 - Vertebrate Mitochondrial code
-    3 - Yeast mitochondrial code
-    4 - Mold, protozoan, and coelenterate mitochondrial code and the mycoplasma/spiroplasma code
+    1 - Standard Code
+    2 - Vertebrate Mitochondrial Code
+    3 - Yeast mitochondrial Code
+    4 - Mold, protozoan, and coelenterate mitochondrial code and the mycoplasma/spiroplasma Code
     5 - Invertebrate Mitochondrial Code
     6 - Ciliate, Dasycladacean and Hexamita Nuclear Code
     9 - Echinoderm and Flatworm Mitochondrial Code
@@ -193,6 +194,10 @@ arg=$1
   --detect)
   detect=1
   shift
+  ;;
+  --rename)
+  rename=$2
+  shift 2
   ;;
   --seq_range)
   OFS=$IFS
@@ -453,7 +458,6 @@ arg=$1
             's/c[tu]g/A/gi'
             
           # Karyorelict Nuclear Code
-          # TODO UGA STOP or Trp
           elif [[ $translate_table = 27 ]]
           then
            sed --regexp-extended \
@@ -461,7 +465,6 @@ arg=$1
              s/[tu]ga/W/gi'
              
           # Condylostoma Nuclear Code
-          # TODO UGA/UAA/UAG STOP or Trp/Gln
           elif [[ $translate_table = 28 ]]
           then
            sed --regexp-extended \
@@ -481,7 +484,6 @@ arg=$1
             's/[tu]a[ag]/E/gi'
             
           # Blastocrithidia Nuclear Code
-          # TODO UAG/UAA STOP or Glu
           elif [[ $translate_table = 31 ]]
           then
            sed --regexp-extended \
@@ -502,34 +504,26 @@ arg=$1
          # Standard code
          sed --regexp-extended \
          's/a[tu]g/M/gi;
-          s/a[tu][tuc]/I/gi;
+          s/a[tu][tuc]|a[tu]a/I/gi;
           s/ac[actugn]/T/gi;
           s/aa[tuc]/N/gi;
           s/aa[ag]/K/gi;
-          s/ag[tuc]/S/gi;
+          s/ag[tuc]|[tu]c[acgtun]/S/gi;
           s/[tu][tu][tuc]/F/gi;
-          s/[tu][tu][ag]/L/gi;
-          s/[tu]c[acgtun]/S/gi;
           s/[tu]a[tuc]/Y/gi;
-          s/[tu]a[ag]/*/gi;
           s/[tu]g[tuc]/C/gi;
           s/[tu]gg/W/gi;
+          s/c[tu][acgtun]|[tu][tu][ag]/L/gi;
           s/cc[acgtun]/P/gi;
           s/ca[tuc]/H/gi;
           s/ca[ag]/Q/gi;
-          s/cg[gtu]/R/gi;
+          s/cg[acgtun]|ag[ag]/R/gi;
           s/g[tu][acgtun]/V/gi;
           s/gc[acgtun]/A/gi;
           s/ga[tcu]/D/gi;
           s/ga[ag]/E/gi;
           s/gg[acgtun]/G/gi;
-          s/a[tu]a/I/gi;
-          s/ag[ag]/R/gi;
-          s/c[tu][acgtun]/L/gi;
-          s/cg[ac]/R/gi;
-          s/[tu]ga/*/gi'
-          
-         MOLECULE="PROTEIN"
+          s/[tu]ga|[tu]a[ag]/*/gi'
 }
   
   # Residue weights
@@ -567,36 +561,40 @@ arg=$1
          if [ $strand -eq 1 ]
          then
           parallel -k -j"$(($threads/2))" --block 30M --pipe 'sed --regexp-extended \
-          "s/a/313.20672 /gi;
+          "s/[^atcg]//gi;
+           s/a/313.20672 /gi;
            s/t/304.19322 /gi;
            s/c/289.18182 /gi;
            s/g/329.20592 /gi;
            s/ $//g;"' |
-           awk -F ' ' '{for(i=1;i<=NF;i++) t+=$i; printf "%.5f\n", t+18.01528; t=0}'
+           awk -F ' ' '{for(i=1;i<=NF;i++) t+=$i; printf "%.5f\n", t+18.01528+78.972; t=0}'
          else 
           parallel -k -j"$(($threads/2))" --block 30M --pipe 'sed --regexp-extended \
-          "s/[at]/313.20672 304.19322 /gi;
+          "s/[^atcg]//gi;
+           s/[at]/313.20672 304.19322 /gi;
            s/[cg]/289.18182 329.20592 /gi;
            s/ $//g;"' |
-           awk -F ' ' '{for(i=1;i<=NF;i++) t+=$i; printf "%.5f\n", t+(2*18.01528); t=0}'
+           awk -F ' ' '{for(i=1;i<=NF;i++) t+=$i; printf "%.5f\n", t+2*(18.01528+78.972); t=0}'
          fi
          elif [[ $MOLECULE == "RNA" ]]
          then
          if [ $strand -eq 1 ]
          then
           parallel -k -j"$(($threads/2))" --block 30M --pipe 'sed --regexp-extended \
-          "s/a/313.20672 /gi;
+          "s/[^aucg]//gi;
+           s/a/329.20592 /gi;
            s/u/306.16602 /gi;
-           s/c/289.18182 /gi;
-           s/g/329.20592 /gi;
+           s/c/305.18122 /gi;
+           s/g/345.20472 /gi;
            s/ $//g;"' |
-           awk -F ' ' '{for(i=1;i<=NF;i++) t+=$i; printf "%.5f\n", t+18.01528; t=0}'
+           awk -F ' ' '{for(i=1;i<=NF;i++) t+=$i; printf "%.5f\n", t+18.01528+159.9588; t=0}'
           else
            parallel -k -j"$(($threads/2))" --block 30M --pipe 'sed --regexp-extended \
-          "s/[au]/313.20672 306.16602 /gi;
-           s/[cg]/289.18182 329.20592 /gi;
+          "s/[^aucg]//gi;
+           s/[au]/329.20592 306.16602 /gi;
+           s/[cg]/305.18122 345.20472 /gi;
            s/ $//g;"' |
-           awk -F ' ' '{for(i=1;i<=NF;i++) t+=$i; printf "%.5f\n", t+18.01528; t=0}'
+           awk -F ' ' '{for(i=1;i<=NF;i++) t+=$i; printf "%.5f\n", t+2*(18.01528+159.9588); t=0}'
           fi
           fi
      }
@@ -604,7 +602,7 @@ arg=$1
      function detect_mol(){
      local input=$(mktemp --tmpdir=/tmp fastakit$script_pid.XXXXXXXXXX)
      head --bytes=5000000 $1 > $input
-     if $(awk '{IGNORECASE=1; seq=length($0); gsub("[actgun]","",$0)}; length($0)/seq > 0.05{exit 1}' $input)
+     if $(awk '{IGNORECASE=1; seq=length($0); gsub("[actguxn]","",$0)}; length($0)/seq > 0.05{exit 1}' $input)
      then
       export MOL=$(mktemp --tmpdir=/tmp fastakit$script_pid.XXXXXXXXXX)
       export input
@@ -744,7 +742,7 @@ arg=$1
       }
       
       # Multi-line conversion function
-      multiline(){
+      function multiline(){
       paste $1 $2 |
      grep --perl-regexp --invert-match "\t$" |
      tr "\t" "\n" |
@@ -763,7 +761,7 @@ arg=$1
      }
      
      # Sequence statistics function
-     seq_stats(){
+     function seq_stats(){
      lengths=$(mktemp --tmpdir=/tmp fastakit$script_pid.XXXXXXXXXX)
      awk '{print length($0)}' $1 | sort -rn > $lengths
      total=$(awk '{OFS="\t"}; {sum+=$0}; END{printf "%.0f", sum}' $lengths)
@@ -791,7 +789,7 @@ arg=$1
      }
      
      # Complementary sequnce function
-     fun_comp(){
+     function fun_comp(){
      if test -n "$1"
       then
        cat $1
@@ -811,7 +809,7 @@ arg=$1
       }
       
       # Reverse sequnce function
-      fun_rev(){
+      function fun_rev(){
       if test -n "$1"
       then
        cat $1
@@ -822,7 +820,7 @@ arg=$1
       }
       
       # RNA-to-DNA conversion function
-      fun_rna_dna(){
+      function fun_rna_dna(){
       if test -n "$1"
       then
        cat $1
@@ -833,7 +831,7 @@ arg=$1
       }
       
       # ORF search
-      orf_search(){
+      function orf_search(){
        local SWITCH
        local ORFstart=$1
        local ORFend=$2
@@ -899,10 +897,10 @@ arg=$1
          gsub(" ","",flank);
          len_flank=length(flank)
          };
-         print $1"_orf"orf,substr(flank,length(flank) - upstream + 1);
+         orf_out = $1"_orf"orf OFS substr(flank,length(flank) - upstream + 1);
          orf++; seek=1}
          else{
-         if(sep[i] ~ /[tu][ag]a|[tu]ag/) {seek=0}
+         if(sep[i] ~ /[tu][ag]a|[tu]ag/ && seek==1) {print orf_out; seek=0}
          }
          }}}'
         elif [ ! -z ${downstream+x} ]
@@ -935,11 +933,11 @@ arg=$1
          if(FNR % 1000 && orf_core == 0 && verbose == 1){printf ("Getting ORFs: %d%\r", 100*FNR/ORFend) > "/dev/tty"};
          if(FNR == ORFend && orf_core == 0 && verbose == 1) print "" > "/dev/tty";
          for(i in seq) {
-         if(max_orf_num == 0 || orf <= max_orf_num){
-         if(sep[i] ~ /a[tu]g/ && seek == 0) {print $1"_orf"orf,sep[i]seq[i+1]; orf++; seek=1}
+         if(max_orf_num == 0 || orf <= max_orf_num && i < last){
+         if(sep[i] ~ /a[tu]g/ && seek == 0) {orf_out = $1"_orf"orf OFS sep[i] OFS seq[i+1]; orf++; seek=1}
          else{
-         if(sep[i] ~ /a[tu]g/ && seek == 1) {print sep[i]seq[i+1]};
-         if(sep[i] ~ /[tu][ag]a|[tu]ag/ && seek == 1) {print sep[i]; seek=0};
+         if(sep[i] ~ /a[tu]g/ && seek == 1) {orf_out = orf_out sep[i] seq[i+1]};
+         if(sep[i] ~ /[tu][ag]a|[tu]ag/ && seek == 1) {print orf_out sep[i]; seek=0};
          }}}}'
         fi |
         tr "\t" "\n" |
@@ -953,15 +951,6 @@ arg=$1
          tr --delete " [:lower:]"
         else
          tr --delete " "
-        fi |
-        if [ ! -z ${seq_range+x} ]
-        then
-         awk -v min_seq_length="${seq_range[0]}" -v max_seq_length="${seq_range[1]}" \
-         '{seq=$0; gsub("*","",seq);
-         if(length(seq) >= min_seq_length && (length(seq) <= max_seq_length || max_seq_length == 0)) print $0;
-         else print ""}'
-        else
-         cat
         fi > ${!outcore_orf}
        fi
       }
@@ -1043,8 +1032,14 @@ arg=$1
     
     if [ $verbose -eq 1 ]; then echo -en "Using "$threads" thread(s)\n\n" > $(readlink /proc/$$/fd/2); fi
 
-    parallel -a $FILE -k -j"$threads" --block 30M --pipepart 'grep --perl-regexp "^>"' |
-    sed --regexp-extended 's/\r//g' > $HEADERS
+    if [ ! -z ${rename+x} ]
+    then
+     echo ">"$rename"_"$(seq -s "@>"$rename"_" $(grep --count --perl-regexp "^>" $FILE)) |
+     tr "@" "\n" > $HEADERS
+    else
+     parallel -a $FILE -k -j"$threads" --block 30M --pipepart 'grep --perl-regexp "^>"' |
+     sed --regexp-extended 's/\r//g' > $HEADERS
+    fi
     
 if [[ $(grep --count --perl-regexp "^>" $FILE) != $(grep --count --perl-regexp --invert-match "^>" $FILE) ]]
     then
@@ -1342,32 +1337,20 @@ if [[ $(grep --count --perl-regexp "^>" $FILE) != $(grep --count --perl-regexp -
      if [ ! -z ${makebed+x} ]
      then
      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
-     if [ -z ${seq_range+x} ]
-     then
-      awk -F $'\t' '{OFS="\t"};
-      {headers=$1}; {gsub(/_orf[0-9]+/,"",$1)}; {gsub(/_frame[0-9]+/,"",$1)};
-      $2 ~ 1{print $1,$4,$5,$5-$4,headers,0,"+",$4,$5,"0,128,255"}
-      $2 ~ 2{print $1,$4+1,$5+1,$5-$4,headers,0,"+",$4+1,$5+1,"0,164,255"}
-      $2 ~ 3{print $1,$4+2,$5+2,$5-$4,headers,0,"+",$4+2,$5+2,"0,200,255"}
-      $2 ~ 4{print $1,$3-$5,$3-$4,$5-$4,headers,0,"-",$3-$5,$3-$4,"255,128,0"}
-      $2 ~ 5{print $1,$3-$5+1,$3-$4+1,$5-$4,headers,0,"-",$3-$5+1,$3-$4+1,"255,164,0"}
-      $2 ~ 6{print $1,$3-$5+2,$3-$4+2,$5-$4,headers,0,"-",$3-$5+2,$3-$4+2,"255,200,0"}' $INFILE
-     else
-      awk -F $'\t' -v min_seq_length="${seq_range[0]}" -v max_seq_length="${seq_range[1]}" '{OFS="\t"};
+     awk -F $'\t' -v min_seq_length="${seq_range[0]-0}" -v max_seq_length="${seq_range[1]-0}" '{OFS="\t"};
       {headers=$1}; {gsub(/_orf[0-9]+/,"",$1)}; {gsub(/_frame[0-9]+/,"",$1)};
       $2 ~ 1{if( $5-$4 >= min_seq_length && ($5-$4 <= max_seq_length || max_seq_length == 0)){
-      print $1,$4,$5,$5-$4,headers,0,"+",$4,$5,"0,128,255"}}
+      print $1,$4,$5-1,$5-$4,headers,0,"+",$4,$5-1,"0,128,255"}}
       $2 ~ 2{if( $5-$4 >= min_seq_length && ($5-$4 <= max_seq_length || max_seq_length == 0)){
-      print $1,$4+1,$5+1,$5-$4,headers,0,"+",$4+1,$5+1,"0,164,255"}}
+      print $1,$4+1,$5,$5-$4,headers,0,"+",$4+1,$5,"0,164,255"}}
       $2 ~ 3{if( $5-$4 >= min_seq_length && ($5-$4 <= max_seq_length || max_seq_length == 0)){
-      print $1,$4+2,$5+2,$5-$4,headers,0,"+",$4+2,$5+2,"0,200,255"}}
+      print $1,$4+2,$5+1,$5-$4,headers,0,"+",$4+2,$5+1,"0,200,255"}}
       $2 ~ 4{if( $5-$4 >= min_seq_length && ($5-$4 <= max_seq_length || max_seq_length == 0))
-      {print $1,$3-$5,$3-$4,$5-$4,headers,0,"-",$3-$5,$3-$4,"255,128,0"}}
+      {print $1,$3-$5,$3-$4,$5-$4,headers,0,"-",$3-$5+1,$3-$4,"255,128,0"}}
       $2 ~ 5{if( $5-$4 >= min_seq_length && ($5-$4 <= max_seq_length || max_seq_length == 0)){
-      print $1,$3-$5+1,$3-$4+1,$5-$4,headers,0,"-",$3-$5+1,$3-$4+1,"255,164,0"}}
+      print $1,$3-$5+1,$3-$4,$5-$4,headers,0,"-",$3-$5+1,$3-$4,"255,164,0"}}
       $2 ~ 6{if( $5-$4 >= min_seq_length && ($5-$4 <= max_seq_length || max_seq_length == 0)){
-      print $1,$3-$5+2,$3-$4+2,$5-$4,headers,0,"-",$3-$5+2,$3-$4+2,"255,200,0"}}' $INFILE
-     fi |
+      print $1,$3-$5+1,$3-$4,$5-$4,headers,0,"-",$3-$5+1,$3-$4,"255,200,0"}}' $INFILE |
      if [ ! -z $max_seq ]
      then
       sort --parallel="$threads" --field-separator=$'\t' --key=1,1 --key=4,4nr |
@@ -1399,15 +1382,6 @@ if [[ $(grep --count --perl-regexp "^>" $FILE) != $(grep --count --perl-regexp -
      fi
     fi
     
-    # Minimum/Maximum length (nucleotie)
-     if [ ! -z ${seq_range+x} ] && [ -z ${orf+x} ]
-     then
-     SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
-      awk -v min_seq_length="${seq_range[0]}" -v max_seq_length="${seq_range[1]}" \
-      '{seq=$0; gsub("*","",seq); if(length(seq) >= min_seq_length && (length(seq) <= max_seq_length || max_seq_length == 0)) print $0;
-      else print ""}' $INFILE > $OUTFILE
-     fi
-     
     # Separate to codons and translate
     if [ ! -z ${translate+x} ] && [ -z ${orf+x} ]
     then
@@ -1429,6 +1403,15 @@ if [[ $(grep --count --perl-regexp "^>" $FILE) != $(grep --count --perl-regexp -
         show_time
        fi
     fi
+    
+    # Minimum/Maximum length
+     if [ ! -z ${seq_range+x} ]
+     then
+     SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
+      awk -v min_seq_length="${seq_range[0]}" -v max_seq_length="${seq_range[1]}" \
+      '{seq=$0; gsub("*","",seq); if(length(seq) >= min_seq_length && (length(seq) <= max_seq_length || max_seq_length == 0)) print $0;
+      else print ""}' $INFILE > $OUTFILE
+     fi
     
     # Randomize sequences
     if [ ! -z ${random+x} ]
@@ -1546,6 +1529,7 @@ if [[ $(grep --count --perl-regexp "^>" $FILE) != $(grep --count --perl-regexp -
     then
     if [ $verbose -eq 1 ]; then echo "Calculating molecular weight" > $(readlink /proc/$$/fd/2); fi
      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
+     detect_mol $INFILE
      if [[ $MOLECULE == "DNA" ]] || [[ $MOLECULE = "RNA" ]]
      then
       paste <(cut --fields=1 $INFILE | tr --delete ">") <(cut --fields=2 $INFILE | calc_MW 1 -) <(cut --fields=2 $INFILE | calc_MW 2 -)
@@ -1567,8 +1551,8 @@ if [[ $(grep --count --perl-regexp "^>" $FILE) != $(grep --count --perl-regexp -
      # Detect restriction sites
      if [ ! -z ${renz+x} ] && [[ $MOLECULE != "PROTEIN" ]]
      then
+     SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
      if [ $verbose -eq 1 ]; then echo "Detecting restriction sites" > $(readlink /proc/$$/fd/2); fi
-      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
       if [[ "${min_max_re[0]=0}" =~ "list" ]]
        then
         res_enz $INFILE ${min_max_re[0]=0} ${min_max_re[1]=0} ${min_max_re[2]=0} ${min_max_re[3]=0} ${min_max_re[4]=0}

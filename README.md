@@ -55,7 +55,7 @@ fastakit [OPTIONS] [Sequence.fasta | stdin]
 - The `-p | --translate` option applies to each ORF only if `--orf` is selected, otherwise it applies to the entire sequence, regardless of start/stop codons.
 - The `-l | --length_sort` option applies after ORFs are retrieved and/or sequences are translated.
 - If you want the reverse complement, use `-c | --complement` and `-m | --reverse_seq`.
-- The `--seq_range` option applies to the nucleic acid sequences or protein sequences (excluding the protein stop character).
+- The `--seq_range` option applies to the nucleic acid sequences or protein sequences (excluding the protein stop character) after translation. For example, in order to translate nucleotide sequences between 50 and 100 bp use `fastakit --seq_range 50,100 sequences.fasta | fastakit --translate`.
 - The `--check` option returns exit code 0 if the FASTA file is single-line.
 - The `--mw` option detects DNA/RNA/Protein sequences, and outputs the average molecular weight of ssDNA/ssRNA and dsDNA/dsRNA seperated by a tab or protein average molecular weight.
 - The `--re` option detects restriction enzyme recognition sites, but **IGNORES** cut sites and methylation sensitivity. The inputs for this option are a restriction enzyme name, minimum and maximum length of recognition site, and minimum and maximum number of detected sites; seperated by a comma (e.g. HpaII,0,0,1,2). Each parameter can be ignored with 0.
