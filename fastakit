@@ -601,7 +601,8 @@ arg=$1
      
      function detect_mol(){
      local input=$(mktemp --tmpdir=/tmp fastakit$script_pid.XXXXXXXXXX)
-     head --bytes=5000000 $1 > $input
+     head --bytes=5000000 $1 |
+     tr --delete "\n" > $input
      if $(awk '{IGNORECASE=1; seq=length($0); gsub("[actguxn]","",$0)}; length($0)/seq > 0.05{exit 1}' $input)
      then
       export MOL=$(mktemp --tmpdir=/tmp fastakit$script_pid.XXXXXXXXXX)
@@ -1439,6 +1440,11 @@ if [[ $(grep --count --perl-regexp "^>" $FILE) != $(grep --count --perl-regexp -
       '{OFS="\t"}; {headers=$1}; {seq=$2}; {gsub(/_orf[0-9]+/,"",$1)}; {gsub(/_frame[0-9]+/,"",$1)}; {gsub("*","",$2)};
       {print length($2),$1,headers,seq}' $INFILE |
       sort --parallel="$threads" --field-separator=$'\t' --key=2,2 --key=1,1nr |
+      
+      # TODO
+      # xargs -P $threads -0 -I @ sh -c "grep -w -m $max_seq \"@\"" - < <(sed -E 's/_orf[0-9]+//g; s/_frame[0-9]+//g' $HEADERS | sort -u)
+      # exit 1
+      
       awk -F $'\t' -v max_seq="$max_seq" \
       'NR==1{i=1; head=$2}; {if($2 == head) {if(i <= max_seq){print $0; i++; head=$2} else next} else {print $0; i=2; head=$2}}' |
       cut --fields=3,4 > $OUTFILE
