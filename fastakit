@@ -601,9 +601,8 @@ arg=$1
      
      function detect_mol(){
      local input=$(mktemp --tmpdir=/tmp fastakit$script_pid.XXXXXXXXXX)
-     head --bytes=5000000 $1 |
-     tr --delete "\n" > $input
-     if $(awk '{IGNORECASE=1; seq=length($0); gsub("[actguxn]","",$0)}; length($0)/seq > 0.05{exit 1}' $input)
+     input=$1
+     if [ $(head --bytes=5000000 $input | grep --ignore-case --max-count=1 --count --perl-regexp "[PLIFQE]") -eq 0 ]
      then
       export MOL=$(mktemp --tmpdir=/tmp fastakit$script_pid.XXXXXXXXXX)
       export input
@@ -1053,7 +1052,8 @@ if [[ $(grep --count --perl-regexp "^>" $FILE) != $(grep --count --perl-regexp -
      if [ $verbose -eq 1 ]; then echo "Converting to single line FASTA" > $(readlink /proc/$$/fd/2); fi
      sed --regexp-extended 's/\r//g' $FILE |
      perl -pe '$. > 1 and /^>/ ? print "\n" : chomp' |
-     grep --perl-regexp --invert-match "^>" > $OUTFILE
+     grep --perl-regexp --invert-match "^>" |
+     tr --delete " " > $OUTFILE
      
     # Convert to upper-case
     elif [[ $lettercase = 1 ]]
@@ -1062,7 +1062,8 @@ if [[ $(grep --count --perl-regexp "^>" $FILE) != $(grep --count --perl-regexp -
       sed --regexp-extended 's/\r//g' $FILE |
       perl -pe '$. > 1 and /^>/ ? print "\n" : chomp' |
       grep --perl-regexp --invert-match "^>" |
-      tr "[:lower:]" "[:upper:]" > $OUTFILE
+      tr "[:lower:]" "[:upper:]" |
+      tr --delete " " > $OUTFILE
       
     # Convert to lower-case
      elif [[ $lettercase = 2 ]]
@@ -1071,7 +1072,8 @@ if [[ $(grep --count --perl-regexp "^>" $FILE) != $(grep --count --perl-regexp -
        sed --regexp-extended 's/\r//g' $FILE |
        perl -pe '$. > 1 and /^>/ ? print "\n" : chomp' |
        grep --perl-regexp --invert-match "^>" |
-       tr "[:upper:]" "[:lower:]" > $OUTFILE
+       tr "[:upper:]" "[:lower:]" |
+       tr --delete " " > $OUTFILE
       
      fi
      if [ $verbose -eq 1 ]
@@ -1090,17 +1092,20 @@ if [[ $(grep --count --perl-regexp "^>" $FILE) != $(grep --count --perl-regexp -
      if [ $verbose -eq 1 ]; then echo "Skipping single line FASTA conversion" > $(readlink /proc/$$/fd/2); fi
     if [[ $lettercase = 0 ]]
     then
-     parallel -a $FILE -k -j"$threads" --block 30M --pipepart 'grep --perl-regexp --invert-match "^>"'  > $OUTFILE
+     parallel -a $FILE -k -j"$threads" --block 30M --pipepart 'grep --perl-regexp --invert-match "^>"' |
+     tr --delete " " > $OUTFILE
     elif [[ $lettercase = 1 ]]
     then
      if [ $verbose -eq 1 ]; then echo "Converting to upper-case FASTA" > $(readlink /proc/$$/fd/2); fi
      parallel -a $FILE -k -j"$threads" --block 30M --pipepart 'grep --perl-regexp --invert-match "^>"' |
-     tr "[:lower:]" "[:upper:]" > $OUTFILE
+     tr "[:lower:]" "[:upper:]" |
+     tr --delete " " > $OUTFILE
     elif [[ $lettercase = 2 ]]
     then
      if [ $verbose -eq 1 ]; then echo "Converting to lower-case FASTA" > $(readlink /proc/$$/fd/2); fi
      parallel -a $FILE -k -j"$threads" --block 30M --pipepart 'grep --perl-regexp --invert-match "^>"' |
-     tr "[:upper:]" "[:lower:]" > $OUTFILE
+     tr "[:upper:]" "[:lower:]" |
+     tr --delete " " > $OUTFILE
     fi
     if [ $verbose -eq 1 ]
      then
