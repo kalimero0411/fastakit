@@ -12,7 +12,7 @@ fastakit [OPTIONS] [Sequence.fasta | stdin]
 	-n | --name_sort	Sort FASTA by name
 	-l | --length_sort	Sort FASTA by sequence length (shortest to longest)
 	-r | --reverse_sort	Sort in reverse order
-	--upper	Sequences to uppercase
+	--upper	Sequences to UPPERCASE
 	--lower	Sequences to lowercase
 	-g | --orf	Retrieve ORFs
 	--max_orf_num #	Maximum number of ORFs to output per sequence
@@ -22,7 +22,7 @@ fastakit [OPTIONS] [Sequence.fasta | stdin]
 	--gc	Calculate percent GC per sequence (Disables --translate)
 	--mw	Calculate the moleculare weight of DNA/RNA/protein per sequence (ss ds)
 	--separate DIR	Separate sequnces into files in directory DIR
-	--nonnuc	Non-ACTGU characters (0 ignored)
+	--nonnuc	Non-ACTGU characters
 	--rna_dna	Convert RNA to DNA / DNA to RNA (Default = no conversion)
 	--seq_range #,#	Minimum/Maximum sequence size (e.g. 10,50 ; 0 to ignore)
 	--max_seq Return the # of largest sequences for each input sequence (ORFs, proteins, etc.)
