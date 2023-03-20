@@ -17,21 +17,23 @@ fastakit [OPTIONS] [Sequence.fasta | stdin]
 	-g | --orf	Retrieve ORFs
 	--max_orf_num #	Maximum number of ORFs to output per sequence
 	-p | --translate	Protein sequences in current frame
-	--table #	Translation code (Default = standard code)
+	--table #	Translation code (Default = standard code; '--table list' for all available codes)
 	--frame #	Frame to extract codons (Any of frames 1,2,3,4,5,6; 0 = six frames; Default = 1)
 	--gc	Calculate percent GC per sequence (Disables --translate)
 	--mw	Calculate the moleculare weight of DNA/RNA/protein per sequence (ss ds)
 	--separate DIR	Separate sequnces into files in directory DIR
-	--nonnuc	Non-ACTGU characters
+	--nonnuc	Count non-ACTGU characters per sequence
 	--rna_dna	Convert RNA to DNA / DNA to RNA (Default = no conversion)
 	--seq_range #,#	Minimum/Maximum sequence size (e.g. 10,50 ; 0 to ignore)
 	--max_seq Return the # of largest sequences for each input sequence (ORFs, proteins, etc.)
 	--check	Check if FASTA file is single line
-	--makebed	Create BED output for ORFs (Assumes --orf)
+	--makebed	Create BED output for ORFs (Defaults to --orf)
 	--upstream #	Retrieve # size upstream flanking sequence of ORFs (Assumes --orf)
 	--downstream #	Retrieve # size downstream flanking sequence of ORFs (Assumes --orf)
 	--detect	Detect molucule and exit
-	--re string,#,#,#,#	Detect restriction enzyme recognition sites (Restriction enzyme name, min_length, max_length, min_number, max_number; 0 to ignore; 'list' to list all enzymes)
+	--rename {string}	Change all sequence names to {string}_# (e.g. '--rename test', will give '>test_1' etc.)
+	--extract	Extract contiguous sequences from each sequence (1 = lowercase; 2 = UPPERCASE)
+	--re {string},#,#,#,#	Detect restriction enzyme recognition sites (Restriction enzyme name, min_length, max_length, min_number, max_number; 0 to ignore; 'list' to list all enzymes)
 	-t | --threads #	Number of CPU threads to use (Default = Detected processors or 1)
 	-v | --verbose	Verbose
 	-h | --help	Display help
@@ -62,4 +64,4 @@ fastakit [OPTIONS] [Sequence.fasta | stdin]
 - If `--re` is given a restriction enzyme name (i.e. not 0), the restrictions for recognition site length are removed.
 - Selecting `--re list` gives a list of all possible enzymes.
 - The `--random` option applies after all other sequence manipulation processes.
-- The `--makebed` option enables `--orf` and disables `--translate`. Works with `--seq_range` and `--max_seq`.
+- The `--makebed` option enables `--orf` if neither `--orf` or `--extract` are selected, and disables `--translate`. Works with `--seq_range` and `--max_seq`.
