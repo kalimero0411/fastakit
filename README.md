@@ -52,7 +52,7 @@ fastakit [OPTIONS] [Sequence.fasta | stdin]
 ```
 
 - The `-g | --orf` option divides each sequence into individual ORFs from a start to a stop codon in the current frame, or until the end of the sequence.
-- The `-i | --in-place` is not selected, all output is to stdout by default.
+- If `-i | --in-place` is not selected, all output is to stdout by default.
 - The `--frame` option can take multiple inputs of numbers 1-6 seperated by a comma, or number 0 which is equivilant to 1,2,3,4,5,6.
 - The `-p | --translate` option applies to each ORF only if `--orf` is selected, otherwise it applies to the entire sequence, regardless of start/stop codons.
 - The `-l | --length_sort` option applies after ORFs are retrieved and/or sequences are translated.
