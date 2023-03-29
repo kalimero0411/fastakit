@@ -65,3 +65,4 @@ fastakit [OPTIONS] [Sequence.fasta | stdin]
 - Selecting `--re list` gives a list of all possible enzymes.
 - The `--random` option applies after all other sequence manipulation processes.
 - The `--makebed` option enables `--orf` if neither `--orf` or `--extract` are selected, and disables `--translate`. Works with `--seq_range` and `--max_seq`.
+- The `--stats` option calculates %GC from non-ambiguous bases only (i.e. ATGCU), while the rest of the stats are calculates from the entire sequence.
