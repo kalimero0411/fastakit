@@ -3,6 +3,7 @@
 
 # Default parameters
 version=23.03
+fastakit_dir=$(echo $(dirname $(readlink --canonicalize $(which fastakit))))
 time_start=$(date +%s)
 threads=$(command -v nproc --all &> /dev/null && nproc || echo 1)
 lettercase=0
@@ -622,26 +623,10 @@ arg=$1
      if [ $verbose -eq 1 ]; then echo "Detected molecule: "$MOLECULE > $(readlink /proc/$$/fd/2); fi
      }
      
-     function res_enz(){
-      local input=$(mktemp --tmpdir=/tmp/fastakit.$script_pid fastakit.$script_pid.XXXXXXXXXX)
-      local reout=$(mktemp --tmpdir=/tmp/fastakit.$script_pid fastakit.$script_pid.XXXXXXXXXX)
-      local enztmp=$(mktemp --tmpdir=/tmp/fastakit.$script_pid fastakit.$script_pid.XXXXXXXXXX)
-      local is_enz='[[:alpha:]]'
-      cut --fields=2 $1 > $input
-      local enz_name=$2
-      local repat_min=$3
-      local repat_max=$4
-      local resites_min=$5
-      local resites_max=$6
-      
-      # Get list of all restriction enzymes and their regex pattern
-      if [ -f $(echo $(dirname $(readlink --canonicalize $(which fastakit)))"/neb_rebase") ]
-      then
-       local retmp=$(echo $(dirname $(readlink --canonicalize $(which fastakit)))"/neb_rebase")
-      else
-       reheads=$(mktemp --tmpdir=/tmp/fastakit.$script_pid fastakit.$script_pid.XXXXXXXXXX)
-       repat=$(mktemp --tmpdir=/tmp/fastakit.$script_pid fastakit.$script_pid.XXXXXXXXXX)
-       retmp=$(mktemp --tmpdir=/tmp/fastakit.$script_pid fastakit.$script_pid.XXXXXXXXXX)
+     function get_enz(){
+       local reheads=$(mktemp --tmpdir=/tmp/fastakit.$script_pid fastakit.$script_pid.XXXXXXXXXX)
+       local repat=$(mktemp --tmpdir=/tmp/fastakit.$script_pid fastakit.$script_pid.XXXXXXXXXX)
+       local retmp=$(mktemp --tmpdir=/tmp/fastakit.$script_pid fastakit.$script_pid.XXXXXXXXXX)
        if [ $verbose -eq 1 ]; then echo "Downloading restriction enzyme recognition sites..." > $(readlink /proc/$$/fd/2); fi
        wget --quiet --show-progress --output-document=- ftp://ftp.neb.com/pub/rebase/withref.txt |
        grep --perl-regexp "\<1\>|\<5\>" |
@@ -670,18 +655,24 @@ arg=$1
        paste <(cut --fields=1 $reheads | grep --perl-regexp --invert-match "^$") $repat |
        sort --field-separator=$'\t' --key=2,2 |
        uniq --skip-fields=1 --group="both" > $retmp
-       paste <(cut --fields=1 $retmp | tr "\n" ";" | sed --regexp-extended 's/;;/\n/g; s/^;//g') <(cut --fields=2 $retmp | grep -v "^$" | uniq) > $repat
-       retmp=$repat
-       fi
-       
-       if [[ $enz_name =~ "list" ]]
-       then
-        cut --fields=1 $retmp |
-        tr ";" "\n"
-        exit 0
-       fi
-       
-       # Create search arrays
+       paste <(cut --fields=1 $retmp | tr "\n" ";" | sed --regexp-extended 's/;;/\n/g; s/^;//g') <(cut --fields=2 $retmp | grep -v "^$" | uniq) \
+       > $fastakit_dir"/neb_rebase"
+     }
+     
+     function res_enz(){
+      local input=$(mktemp --tmpdir=/tmp/fastakit.$script_pid fastakit.$script_pid.XXXXXXXXXX)
+      local reout=$(mktemp --tmpdir=/tmp/fastakit.$script_pid fastakit.$script_pid.XXXXXXXXXX)
+      local enztmp=$(mktemp --tmpdir=/tmp/fastakit.$script_pid fastakit.$script_pid.XXXXXXXXXX)
+      local is_enz='[[:alpha:]]'
+      cut --fields=2 $1 > $input
+      local enz_name=$2
+      local repat_min=$3
+      local repat_max=$4
+      local resites_min=$5
+      local resites_max=$6
+      local retmp=$fastakit_dir"/neb_rebase"
+      
+      # Create search arrays
        if [[ $enz_name =~ $is_enz ]]
        then
         repat_tmp=($(grep --ignore-case --perl-regexp '^'"$enz_name"'[\t;]|;'"$enz_name"'[\t;]' $retmp | tr "\t" " "))
@@ -1148,6 +1139,21 @@ arg=$1
    translate_table=1
   fi
   
+  # Get RE database if it doesn't exist
+  if [ ! -f $fastakit_dir"/neb_rebase" ]
+   then
+    get_enz
+   fi
+  
+  # Output list of REs
+  if [[ ${min_max_re[0]=0} =~ "list" ]]
+   then
+    cut --fields=1 $fastakit_dir"/neb_rebase" |
+    tr ";" "\n" |
+    sort
+    exit 0
+  fi
+  
     # Get input files    
     if [ $# -ge 1 -a -f "$1" ]
     then
@@ -1569,12 +1575,7 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep -
       awk -F $'\t' \
       '{OFS="\t"}; {headers=$1}; {seq=$2}; {gsub(/_orf[0-9]+/,"",$1)}; {gsub(/_frame[0-9]+/,"",$1)}; {gsub("*","",$2)};
       {print length($2),$1,headers,seq}' $INFILE |
-      sort --parallel="$threads" --field-separator=$'\t' --key=2,2 --key=1,1nr |
-      
-      # TODO
-      # xargs -P $threads -0 -I @ sh -c "grep -w -m $max_seq \"@\"" - < <(sed -E 's/_orf[0-9]+//g; s/_frame[0-9]+//g' $HEADERS | sort -u)
-      # exit 1
-      
+      sort --parallel="$threads" --field-separator=$'\t' --key=2,2 --key=1,1nr |      
       awk -F $'\t' -v max_seq="$max_seq" \
       'NR==1{i=1; head=$2}; {if($2 == head) {if(i <= max_seq){print $0; i++; head=$2} else next} else {print $0; i=2; head=$2}}' |
       cut --fields=3,4 > $OUTFILE
