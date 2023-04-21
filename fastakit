@@ -2,7 +2,7 @@
 #set -x
 
 # Default parameters
-version=23.03
+version=23.04
 fastakit_dir=$(echo $(dirname $(readlink --canonicalize $(which fastakit))))
 time_start=$(date +%s)
 threads=$(command -v nproc --all &> /dev/null && nproc || echo 1)
@@ -20,50 +20,51 @@ cleanup(){
 }
 trap cleanup EXIT
 
-function print_usage(){
- printf "
-fastakit [OPTIONS] [Sequence.fasta | stdin]
-	-i | --in-place	Modify file in-place
-	-c | --complement	Complementary sequence
-	-m | --reverse_seq	Reverse sequence
-	--unique	Remove duplicate sequences
-	--multi #	Convert to multi-line FASTA (nucleotide only)
-	--random	Create random sequences of respective length
-	-n | --name_sort	Sort FASTA by name
-	-l | --length_sort	Sort FASTA by sequence length (shortest to longest)
-	-r | --reverse_sort	Sort in reverse order
-	--upper	Sequences to UPPERCASE
-	--lower	Sequences to lowercase
-	-g | --orf	Retrieve ORFs
-	--max_orf_num #	Maximum number of ORFs to output per sequence
-	-p | --translate	Protein sequences in current frame
-	--table #	Translation code (Default = standard code; '--table list' for all available codes)
-	--frame #	Frame to extract codons (Any of frames 1,2,3,4,5,6; 0 = six frames; Default = 1)
-	--gc	Calculate percent GC per sequence (Disables --translate)
-	--mw	Calculate the moleculare weight of DNA/RNA/protein per sequence (ss ds)
-	--separate DIR	Separate sequnces into files in directory DIR
-	--nonnuc	Count non-ACTGU characters per sequence
-	--rna_dna	Convert RNA to DNA / DNA to RNA (Default = no conversion)
-	--seq_range #,#	Minimum/Maximum sequence size (e.g. 10,50 ; 0 to ignore)
-	--max_seq Return the # of largest sequences for each input sequence (ORFs, proteins, etc.)
-	--check	Check if FASTA file is single line
-	--makebed	Create BED output for ORFs (Defaults to --orf)
-	--upstream #	Retrieve # size upstream flanking sequence of ORFs (Assumes --orf)
-	--downstream #	Retrieve # size downstream flanking sequence of ORFs (Assumes --orf)
-	--detect	Detect molucule and exit
-	--rename {string}	Change all sequence names to {string}_# (e.g. '--rename test', will give '>test_1' etc.)
-	--extract	Extract contiguous sequences from each sequence (1 = lowercase; 2 = UPPERCASE)
-	--re {string},#,#,#,#	Detect restriction enzyme recognition sites (Restriction enzyme name, min_length, max_length, min_number, max_number; 0 to ignore; 'list' to list all enzymes)
-	-t | --threads #	Number of CPU threads to use (Default = Detected processors or 1)
-	-v | --verbose	Verbose
-	-h | --help	Display help
-	--stats	Calculate basic stats
-	--version	Print version date
-	
-	Example: fastakit --orf --frame 0 --seq_range 100,1000 --length-sort sequences.fasta > orfs.fasta
-	
-"
-}
+usage="
+Usage: fastakit [OPTION]... [Sequence.fasta]\n
+\n\
+    -i | --in-place\t Modify file in-place
+    -c | --complement\t Complementary sequence
+    -m | --reverse_seq\t Reverse sequence
+    --unique\t Remove duplicate sequences
+    --multi \t Convert to multi-line FASTA (nucleotide only)
+    --random\t Create random sequences of respective length
+    -n | --name_sort\t Sort FASTA by name
+    -l | --length_sort\t Sort FASTA by sequence length (shortest to longest)
+    -r | --reverse_sort\t Sort in reverse order
+    --upper\t Sequences to UPPERCASE
+    --lower\t Sequences to lowercase
+    -g | --orf\t Retrieve ORFs
+    --max_orf_num #\t Maximum number of ORFs to output per sequence
+    -p | --translate\t Protein sequences in current frame
+    --table #\t Translation code (Default = standard code; '--table list' for all available codes)
+    --frame #\t Frame to extract codons (Any of frames 1,2,3,4,5,6; 0 = six frames; Default = 1)
+    --gc\t Calculate percent GC per sequence (Disables --translate)
+    --mw\t Calculate the moleculare weight of DNA/RNA/protein per sequence (ss ds)
+    --separate [DIR]\t Separate sequnces into files in directory DIR
+    --nonnuc\t Count non-ACTGU characters per sequence
+    --rna_dna\t Convert RNA to DNA / DNA to RNA (Default = no conversion)
+    --seq_range ,#\t Minimum/Maximum sequence size (e.g. 10,50 ; 0 to ignore)
+    --max_seq #\t Return the # of largest sequences for each input sequence (ORFs, proteins, etc.)
+    --name_regex [string]\t Truncate FASTA header with regex (used with --max_seq)
+    --get_names [string]\t Return the sequences with names that match a string (perl regex)
+    --check\t Check if FASTA file is single line
+    --makebed\t Create BED output for ORFs (Defaults to --orf)
+    --upstream\t Retrieve # size upstream flanking sequence of ORFs (Assumes --orf)
+    --downstream #\t Retrieve # size downstream flanking sequence of ORFs (Assumes --orf)
+    --detect\t Detect molucule and exit
+    --rename [string]\t Change all sequence names to {string}_ (e.g. '--rename test', will give '>test_1' etc.)
+    --extract\t Extract contiguous sequences from each sequence (1 = lowercase; 2 = UPPERCASE)
+    --re [string],,#,#,#\t Detect restriction enzyme recognition sites\n\t (Restriction enzyme name, min_length, max_length, min_number, max_number; 0 to ignore; 'list' to list all enzymes)
+    --stats\t Calculate basic stats
+    --version\t Print version date
+    -t | --threads #\t Number of CPU threads to use (Default = Detected processors or 1)
+    -v | --verbose\t Verbose
+    -h | --help\t Display help
+
+Example: fastakit --orf --frame 0 --seq_range 100,1000 --length-sort sequences.fasta > orfs.fasta
+
+" 
 
 # Check arguments
 while [ "$#" -gt 0 ]
@@ -158,7 +159,7 @@ arg=$1
     1 - Standard Code
     2 - Vertebrate Mitochondrial Code
     3 - Yeast mitochondrial Code
-    4 - Mold, protozoan, and coelenterate mitochondrial code and the mycoplasma/spiroplasma Code
+    4 - Mold, protozoan, and coelenterate mitochondrial code and the mycoplasma/spiroplasma code
     5 - Invertebrate Mitochondrial Code
     6 - Ciliate, Dasycladacean and Hexamita Nuclear Code
     9 - Echinoderm and Flatworm Mitochondrial Code
@@ -188,6 +189,14 @@ arg=$1
   ;;
   --max_seq)
   max_seq=$2 # Return # of largest proteins
+  shift 2
+  ;;
+  --name_regex)
+  name_regex=$2 # Regex for subsetting names (e.g. transcripts to genes)
+  shift 2
+  ;;
+  --get_names)
+  get_names=$2 # Regex for retrieving names
   shift 2
   ;;
   --version)
@@ -258,8 +267,9 @@ arg=$1
   shift
   ;;
   -h | --help)
-  print_usage
-  exit 1
+  printf "$usage" |
+  awk -F $'\t' '{ printf "%-30s %s\n", $1, $2 }'
+  exit 0
   ;;
   *)
   if [ -f "$1" ]
@@ -267,7 +277,8 @@ arg=$1
    break
   else
   echo "Unknown option: "$1
-  print_usage
+  printf "$usage" |
+  awk -F $'\t' '{ printf "%-30s %s\n", $1, $2 }'
   exit 1
   fi
   ;;
@@ -1045,8 +1056,8 @@ arg=$1
       }
       
       makebed_fun(){
-      awk -F $'\t' -v min_seq_length="${seq_range[0]-0}" -v max_seq_length="${seq_range[1]-0}" '{OFS="\t"};
-      {headers=$1}; {gsub(/_orf[0-9]+/,"",$1)}; {gsub(/_frame[0-9]+/,"",$1)}; {gsub(/_extract[0-9]+/,"",$1)};
+      awk -F $'\t' -v min_seq_length="${seq_range[0]-0}" -v max_seq_length="${seq_range[1]-0}" -v name_regex=${name_regex-""} '{OFS="\t"};
+      {headers=$1}; {gsub(/_orf[0-9]+/,"",$1)}; {gsub(/_frame[0-9]+/,"",$1)}; {gsub(/_extract[0-9]+/,"",$1)}; {gsub(name_regex,"",$1)};
       $2 ~ 0{if( $5-$4 >= min_seq_length && ($5-$4 <= max_seq_length || max_seq_length == 0)){
       print $1,$4,$5,$5-$4,headers,0,"+",$4,$5-1,"0,128,255"}}
       $2 ~ 1{if( $5-$4 >= min_seq_length && ($5-$4 <= max_seq_length || max_seq_length == 0)){
@@ -1154,6 +1165,8 @@ arg=$1
     exit 0
   fi
   
+##################################################################
+
     # Get input files    
     if [ $# -ge 1 -a -f "$1" ]
     then
@@ -1269,7 +1282,18 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep -
     fi
     
     detect_mol $OUTFILE
-        
+    
+    # Get subset of sequences from file
+    if [ ! -z $get_names ]
+    then
+     SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
+     HEADERS_TMP=$(mktemp --tmpdir=/tmp/fastakit.$script_pid fastakit.$script_pid.XXXXXXXXXX)
+     grep --perl-regexp --no-group-separator -f <(sed --regexp-extended 's/^/^>/g; s/$/\\t/g' $get_names) <(paste $HEADERS $INFILE) |
+     tee >(cut --fields=1 > $HEADERS_TMP) |
+     cut --fields=2 > $OUTFILE
+     HEADERS=$HEADERS_TMP
+    fi
+    
     # Convert to Multi-line FASTA
     if [ ! -z ${multi+x} ]
     then
@@ -1572,8 +1596,8 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep -
      if [ ! -z ${max_seq+x} ]
      then
       SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
-      awk -F $'\t' \
-      '{OFS="\t"}; {headers=$1}; {seq=$2}; {gsub(/_orf[0-9]+/,"",$1)}; {gsub(/_frame[0-9]+/,"",$1)}; {gsub("*","",$2)};
+      awk -F $'\t' -v name_regex=${name_regex-""} \
+      '{OFS="\t"}; {headers=$1}; {seq=$2}; {gsub(/_orf[0-9]+/,"",$1)}; {gsub(/_frame[0-9]+/,"",$1)}; {gsub(/_extract[0-9]+/,"",$1)}; {gsub(name_regex,"",$1)}; {gsub("*","",$2)};
       {print length($2),$1,headers,seq}' $INFILE |
       sort --parallel="$threads" --field-separator=$'\t' --key=2,2 --key=1,1nr |      
       awk -F $'\t' -v max_seq="$max_seq" \
