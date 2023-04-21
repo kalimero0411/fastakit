@@ -50,7 +50,7 @@ fastakit [OPTIONS]... [Sequence.fasta]
 
 ## Examples
 
-### Getting ORFs in all frames between 100-1000bp sorted by length:
+### Getting ORFs in all frames between 100-1000bp sorted by length
 ```
 	fastakit --orf --frame 0 --seq_range 100,1000 --length_sort sequences.fasta > orfs.fasta
 ```
