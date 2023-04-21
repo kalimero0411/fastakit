@@ -49,11 +49,13 @@ fastakit [OPTIONS]... [Sequence.fasta]
 
 
 ## Examples
-```	
-	Geeing ORFs in all frames between 100-1000bp sorted by length:
+
+### Getting ORFs in all frames between 100-1000bp sorted by length:
+```
 	fastakit --orf --frame 0 --seq_range 100,1000 --length_sort sequences.fasta > orfs.fasta
-	
-	Reading from stdin and outputting sequences with 5-10 EcoRI sites
+```
+### Reading from stdin and outputting sequences with 5-10 EcoRI sites
+```
 	cat sequences.fasta | fastakit --re EcoRI,0,0,5,10
 ```
 
