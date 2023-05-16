@@ -41,6 +41,7 @@ Usage: fastakit [OPTION]... [Sequence.fasta]\n
     --frame #\t Frame to extract codons (Any of frames 1,2,3,4,5,6; 0 = six frames; Default = 1)
     --gc\t Calculate percent GC per sequence (Disables --translate)
     --mw\t Calculate the moleculare weight of DNA/RNA/protein per sequence (ss ds)
+    --mw_sort\t Sort by molecular weight
     --separate [DIR]\t Separate sequnces into files in directory DIR
     --nonnuc\t Count non-ACTGU characters per sequence
     --rna_dna\t Convert RNA to DNA / DNA to RNA (Default = no conversion)
@@ -252,6 +253,10 @@ arg=$1
   ;;
   --mw)
   MW=1
+  shift
+  ;;
+  --mw_sort)
+  MW_sort=1
   shift
   ;;
   --re)
@@ -1438,7 +1443,7 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep -
      fi
      
      # Verbose sequence cutoffs
-     if [ $verbose -eq 1 ] && [ ! -z $seq_range ]; then echo "Extracting "${seq_range[0]}" < sequence(s) < "${seq_range[1]} > $(readlink /proc/$$/fd/2); fi
+     if [ $verbose -eq 1 ] && [ ! -z $seq_range ]; then echo "Extracting sequences between "${seq_range[1]}" and "${seq_range[0]}" bp/aa" > $(readlink /proc/$$/fd/2); fi
      if [ $verbose -eq 1 ] && [ ! -z $max_seq ]; then echo "Extracting "$max_seq" longest sequence(s) for each input sequence" > $(readlink /proc/$$/fd/2); fi
 
      # ORF finding
@@ -1664,6 +1669,42 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep -
       if [ $verbose -eq 1 ]
       then
        echo -n "Length sort done: " > $(readlink /proc/$$/fd/2)
+       show_time
+      fi
+     fi
+     
+     # Sort by molecular weight
+     if [ ! -z ${MW_sort+x} ]
+     then
+      if [ $verbose -eq 1 ]
+      then
+       echo "Sort by molecular weight" > $(readlink /proc/$$/fd/2)
+      fi
+      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH    
+      if [[ $MOLECULE == "DNA" ]] || [[ $MOLECULE = "RNA" ]]
+     then
+      paste <(cut --fields=2 $INFILE | calc_MW 1 -) $INFILE
+     elif [[ $MOLECULE == "PROTEIN" ]]
+     then
+      paste <(cut --fields=2 $INFILE | calc_MW 1) $INFILE
+     else
+      echo "Error detecting molecule" > $(readlink /proc/$$/fd/2)
+      exit 1
+     fi |
+      if [ ! -z ${reverse_sort+x} ]
+      then
+      if [ $verbose -eq 1 ]
+      then
+       echo "Sort in reverse order" > $(readlink /proc/$$/fd/2)
+      fi
+       sort --parallel="$threads" --field-separator=$'\t' --numeric-sort --reverse
+      else
+       sort --parallel="$threads" --field-separator=$'\t' --numeric-sort
+      fi |
+      cut --fields=2,3 > $OUTFILE
+      if [ $verbose -eq 1 ]
+      then
+       echo -n "Molecular weight sort done: " > $(readlink /proc/$$/fd/2)
        show_time
       fi
      fi

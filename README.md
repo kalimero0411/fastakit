@@ -26,6 +26,7 @@ fastakit [OPTIONS]... [Sequence.fasta]
 |            | --frame #        | Frame to extract codons (Any of frames 1,2,3,4,5,6; 0 = six frames; Default = 1)  |
 |            | --gc        | Calculate percent GC per sequence (Disables --translate)  |
 |            | --mw        | Calculate the moleculare weight of DNA/RNA/protein per sequence (ss ds)  |
+|            | --mw_sort        | Sort by molecular weight  |
 |            | --separate [DIR]        | Separate sequnces into files in directory DIR  |
 |            | --nonnuc        | Count non-ACTGU characters per sequence  |
 |            | --rna_dna        | Convert RNA to DNA / DNA to RNA (Default = no conversion)  |
