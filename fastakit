@@ -1288,12 +1288,19 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep -
     
     detect_mol $OUTFILE
     
+    # Exception translate or orf for proteins
+    if ([ ! -z ${translate+x} ] || [ ! -z ${orf+x} ]) && [[ $MOLECULE = "PROTEIN" ]]
+    then
+     echo "Can't get ORFs / translate protein sequences" > $(readlink /proc/$$/fd/2)
+     exit 1
+    fi
+    
     # Get subset of sequences from file
-    if [ ! -z $get_names ]
+    if [ ! -z ${get_names+x} ]
     then
      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
      HEADERS_TMP=$(mktemp --tmpdir=/tmp/fastakit.$script_pid fastakit.$script_pid.XXXXXXXXXX)
-     grep --perl-regexp --no-group-separator -f <(sed --regexp-extended 's/^/^>/g; s/$/\\t/g' $get_names) <(paste $HEADERS $INFILE) |
+     awk -v get_names="$get_names" -F $'\t' '{OFS="\t"}; $1 ~ get_names{print $0}' <(paste $HEADERS $INFILE) |
      tee >(cut --fields=1 > $HEADERS_TMP) |
      cut --fields=2 > $OUTFILE
      HEADERS=$HEADERS_TMP
@@ -1514,6 +1521,7 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep -
       echo -n "ORF detection and translation done: " > $(readlink /proc/$$/fd/2)
       show_time
      fi
+     detect_mol $OUTFILE
     fi
     
     # Separate to codons and translate
@@ -1536,6 +1544,7 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep -
         echo -n "Translation done: " > $(readlink /proc/$$/fd/2)
         show_time
        fi
+       detect_mol $OUTFILE
     fi
     
     # Minimum/Maximum length
@@ -1551,7 +1560,6 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep -
     if [ ! -z ${random+x} ]
      then
       SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
-      detect_mol $INFILE
       random $INFILE > $OUTFILE
       if [ $verbose -eq 1 ]
       then
@@ -1559,7 +1567,9 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep -
        show_time
       fi
      fi
-    
+
+#####################################################################
+     
      # Combine headers and sequences
      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
      paste $HEADERS $INFILE |
@@ -1680,17 +1690,8 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep -
       then
        echo "Sort by molecular weight" > $(readlink /proc/$$/fd/2)
       fi
-      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH    
-      if [[ $MOLECULE == "DNA" ]] || [[ $MOLECULE = "RNA" ]]
-     then
-      paste <(cut --fields=2 $INFILE | calc_MW 1 -) $INFILE
-     elif [[ $MOLECULE == "PROTEIN" ]]
-     then
-      paste <(cut --fields=2 $INFILE | calc_MW 1) $INFILE
-     else
-      echo "Error detecting molecule" > $(readlink /proc/$$/fd/2)
-      exit 1
-     fi |
+      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
+      paste <(cut --fields=2 $INFILE | calc_MW 1) $INFILE |
       if [ ! -z ${reverse_sort+x} ]
       then
       if [ $verbose -eq 1 ]
@@ -1731,7 +1732,6 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep -
     then
     if [ $verbose -eq 1 ]; then echo "Calculating molecular weight" > $(readlink /proc/$$/fd/2); fi
      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
-     detect_mol $INFILE
      if [[ $MOLECULE == "DNA" ]] || [[ $MOLECULE = "RNA" ]]
      then
       paste <(cut --fields=1 $INFILE | tr --delete ">") <(cut --fields=2 $INFILE | calc_MW 1 -) <(cut --fields=2 $INFILE | calc_MW 2 -)
