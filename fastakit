@@ -201,7 +201,7 @@ arg=$1
   shift 2
   ;;
   --version)
-  echo "fastakit version "$version > $(readlink /proc/$$/fd/2)
+  echo "fastakit version "$version >&2
   exit 0
   ;;
   --check)
@@ -293,25 +293,25 @@ arg=$1
   # Check dependencies
   if ! command -v gawk &> /dev/null
   then
-   echo "gawk not installed" > $(readlink /proc/$$/fd/2)
+   echo "gawk not installed" >&2
    deps+="gawk "
   fi
   
   if ! command -v perl &> /dev/null
   then
-   echo "perl not installed" > $(readlink /proc/$$/fd/2)
+   echo "perl not installed" >&2
    deps+="perl "
   fi
   
   if ! command -v parallel &> /dev/null
   then
-   echo "parallel not installed" > $(readlink /proc/$$/fd/2)
+   echo "parallel not installed" >&2
    deps+="parallel "
   fi
   
   if [ ! -z ${deps+x} ]
   then
-   echo "Install using: sudo apt install "${deps[@]} > $(readlink /proc/$$/fd/2)
+   echo "Install using: sudo apt install "${deps[@]} >&2
    exit 1
   fi
   
@@ -339,7 +339,7 @@ arg=$1
     else
         ((sec=num))
     fi
-    echo -e "$day"d "$hour"h "$min"m "$sec"s"\n" > $(readlink /proc/$$/fd/2)
+    echo -e "$day"d "$hour"h "$min"m "$sec"s"\n" >&2
 }
 
   # Translation function
@@ -636,14 +636,14 @@ arg=$1
       MOLECULE="PROTEIN"
      fi
      if [ ! -z ${detect+x} ]; then echo $MOLECULE; fi
-     if [ $verbose -eq 1 ]; then echo "Detected molecule: "$MOLECULE > $(readlink /proc/$$/fd/2); fi
+     if [ $verbose -eq 1 ]; then echo "Detected molecule: "$MOLECULE >&2; fi
      }
      
      function get_enz(){
        local reheads=$(mktemp --tmpdir=/tmp/fastakit.$script_pid fastakit.$script_pid.XXXXXXXXXX)
        local repat=$(mktemp --tmpdir=/tmp/fastakit.$script_pid fastakit.$script_pid.XXXXXXXXXX)
        local retmp=$(mktemp --tmpdir=/tmp/fastakit.$script_pid fastakit.$script_pid.XXXXXXXXXX)
-       if [ $verbose -eq 1 ]; then echo "Downloading restriction enzyme recognition sites..." > $(readlink /proc/$$/fd/2); fi
+       if [ $verbose -eq 1 ]; then echo "Downloading restriction enzyme recognition sites..." >&2; fi
        wget --quiet --show-progress --output-document=- ftp://ftp.neb.com/pub/rebase/withref.txt |
        grep --perl-regexp "\<1\>|\<5\>" |
        tr --delete "\n" |
@@ -717,9 +717,9 @@ arg=$1
         print reheads; else print ""}' $input |
         tr ";" "\t") > $enztmp
         SWITCH=$reout; reout=$enztmp; enztmp=$SWITCH
-        if [ $verbose -eq 1 ]; then echo -en "\033[2K"$((100 * ($re + 1) / ${#repat[@]}))"% | "${reheads[$re]/;*}"\r" > $(readlink /proc/$$/fd/2); fi
+        if [ $verbose -eq 1 ]; then echo -en "\033[2K"$((100 * ($re + 1) / ${#repat[@]}))"% | "${reheads[$re]/;*}"\r" >&2; fi
        done
-       if [ $verbose -eq 1 ]; then echo -en "\n\n" > $(readlink /proc/$$/fd/2); fi
+       if [ $verbose -eq 1 ]; then echo -en "\n\n" >&2; fi
        sed --regexp-extended 's/\t+/\t/g; s/^\t//g; s/\t$//g' $reout
        }
      
@@ -748,7 +748,7 @@ arg=$1
        awk -F $'\t' '{print system("tr --delete --complement ARNCEQGHILKMFPSTWYV < /dev/urandom | head --bytes="length($0))}' |
        tr --delete 0
       else
-       echo "Invalid molucule type!" > $(readlink /proc/$$/fd/2)
+       echo "Invalid molucule type!" >&2
        exit 1
       fi
       }
@@ -785,19 +785,19 @@ arg=$1
      head -1)
      num_seq=$(cat $lengths | wc -l)
      half_num=$(awk -v num_seq=$num_seq 'NR==(int(num_seq/2)+1){printf $0}' $lengths)
-     echo -e "Total length\t"$total > $(readlink /proc/$$/fd/2)
-     echo -e "Sequence #\t"$num_seq > $(readlink /proc/$$/fd/2)
-     echo -e "Longest sequence\t"$(head -1 $lengths) > $(readlink /proc/$$/fd/2)
-     echo -e "Shortest sequence\t"$(tail -1 $lengths) > $(readlink /proc/$$/fd/2)
+     echo -e "Total length\t"$total >&2
+     echo -e "Sequence #\t"$num_seq >&2
+     echo -e "Longest sequence\t"$(head -1 $lengths) >&2
+     echo -e "Shortest sequence\t"$(tail -1 $lengths) >&2
      echo -e "Median\t"$(awk -v num_seq=$num_seq -v half_num=$half_num \
-     'NR==int(num_seq/2){if(num_seq/2 == int(num_seq/2)) printf "%.1f", ($0+half_num)/2; else printf "%.0f", $0}' $lengths) > $(readlink /proc/$$/fd/2)
-     echo -e "Mean\t"$(bc <<< "scale=2; $total/$num_seq") > $(readlink /proc/$$/fd/2)
+     'NR==int(num_seq/2){if(num_seq/2 == int(num_seq/2)) printf "%.1f", ($0+half_num)/2; else printf "%.0f", $0}' $lengths) >&2
+     echo -e "Mean\t"$(bc <<< "scale=2; $total/$num_seq") >&2
      echo -e "GC%\t"$(bc <<< "scale=2; $(cat $1 | tr --delete --complement "[GgCc]" | wc -m)*100/$(cat $1 | tr --delete --complement "[AaTtGgCcUu]" | wc -m)") \
-     > $(readlink /proc/$$/fd/2)
-     echo -e "N50\t"$(awk -v L50_idx=$L50_idx 'NR==L50_idx{printf "%.0f", $0}' $lengths) > $(readlink /proc/$$/fd/2)
-     echo -e "L50\t"$L50_idx > $(readlink /proc/$$/fd/2)
-     echo -e "N90\t"$(awk -v L90_idx=$L90_idx 'NR==L90_idx{printf "%.0f", $0}' $lengths) > $(readlink /proc/$$/fd/2)
-     echo -e "L90\t"$L90_idx > $(readlink /proc/$$/fd/2)
+     >&2
+     echo -e "N50\t"$(awk -v L50_idx=$L50_idx 'NR==L50_idx{printf "%.0f", $0}' $lengths) >&2
+     echo -e "L50\t"$L50_idx >&2
+     echo -e "N90\t"$(awk -v L90_idx=$L90_idx 'NR==L90_idx{printf "%.0f", $0}' $lengths) >&2
+     echo -e "L90\t"$L90_idx >&2
      }
      
      # Complementary sequnce function
@@ -815,7 +815,7 @@ arg=$1
       then
        parallel -k -j"$threads" --block 30M --pipe 'tr \"AUCGaucg\" \"UAGCuagc\"'
       else
-       echo "Invalid molucule type!" > $(readlink /proc/$$/fd/2)
+       echo "Invalid molucule type!" >&2
        exit 1
       fi
       }
@@ -916,7 +916,7 @@ arg=$1
           stop[idx]=(i-1)*3+4 ; seek = 0; print head"_orf"idx,frame,$3,start[idx],stop[idx]; idx++};
           };
           } END{if(orf_core == 0 && verbose == 1) print "\n" > "/dev/tty"}' > ${!outcore_orf}
-       if [ $orf_core -eq 0 ] && [ $verbose -eq 1 ]; then echo "" > $(readlink /proc/$$/fd/2); fi
+       if [ $orf_core -eq 0 ] && [ $verbose -eq 1 ]; then echo "" >&2; fi
        else
         local ORFFILE2=$(mktemp --tmpdir=/tmp/fastakit.$script_pid fastakit.$script_pid.XXXXXXXXXX)
         paste $ORFHEADERS <(awk -F '' '{for(i=1; i<=NF; i+=3) {printf "%s%s ", $i,$(i+1)$(i+2);}; print ""}' $ORFFILE1) |
@@ -1035,7 +1035,7 @@ arg=$1
           count2+=length(arr2[i])};
            }' $ORFFILE1       
        fi > ${!outcore_orf}
-       if [ $orf_core -eq 0 ] && [ $verbose -eq 1 ]; then echo "" > $(readlink /proc/$$/fd/2); fi
+       if [ $orf_core -eq 0 ] && [ $verbose -eq 1 ]; then echo "" >&2; fi
        
        else
      if [ $extract -eq 1 ]
@@ -1090,7 +1090,7 @@ arg=$1
      cat <(echo -e "# Created with fastakit version "$version"\n") -
      if [ $verbose -eq 1 ]
      then
-      echo -ne "\nBED file creation done: " > $(readlink /proc/$$/fd/2)
+      echo -ne "\nBED file creation done: " >&2
       show_time
      fi
      exit 0
@@ -1121,7 +1121,7 @@ arg=$1
   # max_seq exception
   if [ ! -z ${max_seq+x} ] && [ ! $max_seq -gt 0 ] 
   then
-   echo "Error: max_seq must be greater than 0" > $(readlink /proc/$$/fd/2)
+   echo "Error: max_seq must be greater than 0" >&2
    exit 1
   fi
 
@@ -1185,7 +1185,7 @@ arg=$1
     # Check if FASTA
     if [ $(head --lines=1 $FILE | grep --count --perl-regexp "^>") -eq 0 ]
     then
-     echo -e "File doesn't start file a '>' \nIs this a FASTA file?" > $(readlink /proc/$$/fd/2)
+     echo -e "File doesn't start file a '>' \nIs this a FASTA file?" >&2
      exit 1
     fi
     
@@ -1206,7 +1206,7 @@ arg=$1
     INFILE=$(mktemp --tmpdir=/tmp/fastakit.$script_pid fastakit.$script_pid.XXXXXXXXXX)
     OUTFILE=$(mktemp --tmpdir=/tmp/fastakit.$script_pid fastakit.$script_pid.XXXXXXXXXX)
     
-    if [ $verbose -eq 1 ]; then echo -en "Using "$threads" thread(s)\n\n" > $(readlink /proc/$$/fd/2); fi
+    if [ $verbose -eq 1 ]; then echo -en "Using "$threads" thread(s)\n\n" >&2; fi
 
     if [ ! -z ${rename+x} ]
     then
@@ -1218,13 +1218,13 @@ arg=$1
     
 if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep --count ">") != $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep --count --invert-match ">") ]] || [[ $(wc --lines $HEADERS | cut --fields=1 --delimiter=" ") != $(grep --count --invert-match ">" $FILE) ]]
     then
-     if [ $verbose -eq 1 ]; then echo "FASTA file is NOT single line" > $(readlink /proc/$$/fd/2); fi
+     if [ $verbose -eq 1 ]; then echo "FASTA file is NOT single line" >&2; fi
      if [ ! -z ${check_sl+x} ]; then exit 1; fi
 
 
     if [[ $lettercase = 0 ]]
     then
-     if [ $verbose -eq 1 ]; then echo "Converting to single line FASTA" > $(readlink /proc/$$/fd/2); fi
+     if [ $verbose -eq 1 ]; then echo "Converting to single line FASTA" >&2; fi
      perl -pe '$. > 1 and /^>/ ? print "\n" : chomp' $FILE |
      grep --perl-regexp --invert-match "^>" |
      tr --delete " " > $OUTFILE
@@ -1232,7 +1232,7 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep -
     # Convert to upper-case
     elif [[ $lettercase = 1 ]]
      then
-      if [ $verbose -eq 1 ]; then echo "Converting to upper-case single line FASTA" > $(readlink /proc/$$/fd/2); fi
+      if [ $verbose -eq 1 ]; then echo "Converting to upper-case single line FASTA" >&2; fi
       perl -pe '$. > 1 and /^>/ ? print "\n" : chomp' $FILE |
       grep --perl-regexp --invert-match "^>" |
       tr "[:lower:]" "[:upper:]" |
@@ -1241,7 +1241,7 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep -
     # Convert to lower-case
      elif [[ $lettercase = 2 ]]
       then
-       if [ $verbose -eq 1 ]; then echo "Converting to lower-case single line FASTA" > $(readlink /proc/$$/fd/2); fi
+       if [ $verbose -eq 1 ]; then echo "Converting to lower-case single line FASTA" >&2; fi
        perl -pe '$. > 1 and /^>/ ? print "\n" : chomp' $FILE |
        grep --perl-regexp --invert-match "^>" |
        tr "[:upper:]" "[:lower:]" |
@@ -1250,7 +1250,7 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep -
      fi
      if [ $verbose -eq 1 ]
      then
-      echo -n "Single line conversion done: " > $(readlink /proc/$$/fd/2)
+      echo -n "Single line conversion done: " >&2
       show_time
      fi
      
@@ -1259,29 +1259,29 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep -
     
     # Just load single-line sequences
     
-     if [ $verbose -eq 1 ]; then echo "FASTA file is single line" > $(readlink /proc/$$/fd/2); fi
+     if [ $verbose -eq 1 ]; then echo "FASTA file is single line" >&2; fi
      if [ ! -z ${check_sl+x} ]; then exit 0; fi
-     if [ $verbose -eq 1 ]; then echo "Skipping single line FASTA conversion" > $(readlink /proc/$$/fd/2); fi
+     if [ $verbose -eq 1 ]; then echo "Skipping single line FASTA conversion" >&2; fi
     if [[ $lettercase = 0 ]]
     then
      parallel -a $FILE -k -j"$threads" --block 30M --pipepart 'grep --perl-regexp --invert-match "^>"' |
      tr --delete " " > $OUTFILE
     elif [[ $lettercase = 1 ]]
     then
-     if [ $verbose -eq 1 ]; then echo "Converting to upper-case FASTA" > $(readlink /proc/$$/fd/2); fi
+     if [ $verbose -eq 1 ]; then echo "Converting to upper-case FASTA" >&2; fi
      parallel -a $FILE -k -j"$threads" --block 30M --pipepart 'grep --perl-regexp --invert-match "^>"' |
      tr "[:lower:]" "[:upper:]" |
      tr --delete " " > $OUTFILE
     elif [[ $lettercase = 2 ]]
     then
-     if [ $verbose -eq 1 ]; then echo "Converting to lower-case FASTA" > $(readlink /proc/$$/fd/2); fi
+     if [ $verbose -eq 1 ]; then echo "Converting to lower-case FASTA" >&2; fi
      parallel -a $FILE -k -j"$threads" --block 30M --pipepart 'grep --perl-regexp --invert-match "^>"' |
      tr "[:upper:]" "[:lower:]" |
      tr --delete " " > $OUTFILE
     fi
     if [ $verbose -eq 1 ]
      then
-      echo -n "Loading sequence done: " > $(readlink /proc/$$/fd/2)
+      echo -n "Loading sequence done: " >&2
       show_time
      fi
     fi
@@ -1291,7 +1291,7 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep -
     # Exception translate or orf for proteins
     if ([ ! -z ${translate+x} ] || [ ! -z ${orf+x} ]) && [[ $MOLECULE = "PROTEIN" ]]
     then
-     echo "Can't get ORFs / translate protein sequences" > $(readlink /proc/$$/fd/2)
+     echo "Can't get ORFs / translate protein sequences" >&2
      exit 1
     fi
     
@@ -1309,7 +1309,7 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep -
     # Convert to Multi-line FASTA
     if [ ! -z ${multi+x} ]
     then
-     if [ $verbose -eq 1 ]; then echo "Converting to multi line FASTA" > $(readlink /proc/$$/fd/2); fi
+     if [ $verbose -eq 1 ]; then echo "Converting to multi line FASTA" >&2; fi
      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
      multiline $HEADERS $INFILE > $OUTFILE
      if [ ! -z ${inplace+x} ]
@@ -1321,7 +1321,7 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep -
     
     if [ $verbose -eq 1 ]
     then
-     echo -ne "\nMulti line conversion done: " > $(readlink /proc/$$/fd/2)
+     echo -ne "\nMulti line conversion done: " >&2
      show_time
     fi
     exit 0
@@ -1333,7 +1333,7 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep -
      fun_nonnuc $HEADERS $INFILE
      if [ $verbose -eq 1 ]
       then
-       echo -n "Non-ACTGU done: " > $(readlink /proc/$$/fd/2)
+       echo -n "Non-ACTGU done: " >&2
        show_time
       fi
      exit 0
@@ -1344,7 +1344,7 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep -
      seq_stats $OUTFILE
      if [ $verbose -eq 1 ]
       then
-       echo -n "Sequence statistics done: " > $(readlink /proc/$$/fd/2)
+       echo -n "Sequence statistics done: " >&2
        show_time
       fi
      exit 0
@@ -1355,13 +1355,13 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep -
      then
       if [ $verbose -eq 1 ]
       then
-       echo "Converting to complement sequence" > $(readlink /proc/$$/fd/2)
+       echo "Converting to complement sequence" >&2
       fi
       SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
       fun_comp $INFILE > $OUTFILE
       if [ $verbose -eq 1 ]
       then
-       echo -n "Complement conversion done: " > $(readlink /proc/$$/fd/2)
+       echo -n "Complement conversion done: " >&2
        show_time
       fi
      fi
@@ -1372,20 +1372,20 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep -
       SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
       if [[ $MOLECULE = "DNA" ]]
       then
-       if [ $verbose -eq 1 ]; then echo "Converting DNA to RNA sequence" > $(readlink /proc/$$/fd/2); fi
+       if [ $verbose -eq 1 ]; then echo "Converting DNA to RNA sequence" >&2; fi
        MOLECULE="RNA"
       elif [[ $MOLECULE = "RNA" ]]
       then
-       if [ $verbose -eq 1 ]; then echo "Converting RNA to DNA sequence" > $(readlink /proc/$$/fd/2); fi
+       if [ $verbose -eq 1 ]; then echo "Converting RNA to DNA sequence" >&2; fi
        MOLECULE="DNA"
       else
-       echo "Invalid molucule type!" > $(readlink /proc/$$/fd/2)
+       echo "Invalid molucule type!" >&2
        exit 1
       fi
       fun_rna_dna $INFILE > $OUTFILE
       if [ $verbose -eq 1 ]
        then
-        echo -n "DNA/RNA conversion done: " > $(readlink /proc/$$/fd/2)
+        echo -n "DNA/RNA conversion done: " >&2
         show_time
        fi
      fi
@@ -1393,12 +1393,12 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep -
      # Get reverse sequences
      if [ ! -z ${rev_seq+x} ]
      then
-      if [ $verbose -eq 1 ]; then echo "Converting to reverse sequence" > $(readlink /proc/$$/fd/2); fi
+      if [ $verbose -eq 1 ]; then echo "Converting to reverse sequence" >&2; fi
       SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
       fun_rev $INFILE > $OUTFILE
       if [ $verbose -eq 1 ]
       then
-       echo -n "Reverse conversion done: " > $(readlink /proc/$$/fd/2)
+       echo -n "Reverse conversion done: " >&2
        show_time
       fi
      fi
@@ -1450,16 +1450,16 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep -
      fi
      
      # Verbose sequence cutoffs
-     if [ $verbose -eq 1 ] && [ ! -z $seq_range ]; then echo "Extracting sequences between "${seq_range[1]}" and "${seq_range[0]}" bp/aa" > $(readlink /proc/$$/fd/2); fi
-     if [ $verbose -eq 1 ] && [ ! -z $max_seq ]; then echo "Extracting "$max_seq" longest sequence(s) for each input sequence" > $(readlink /proc/$$/fd/2); fi
+     if [ $verbose -eq 1 ] && [ ! -z $seq_range ]; then echo "Extracting sequences between "${seq_range[1]}" and "${seq_range[0]}" bp/aa" >&2; fi
+     if [ $verbose -eq 1 ] && [ ! -z $max_seq ]; then echo "Extracting "$max_seq" longest sequence(s) for each input sequence" >&2; fi
 
      # ORF finding
      if [ ! -z ${orf+x} ]
      then
-     if [ $verbose -eq 1 ]; then echo "ORF | frame(s) "${frame[@]} > $(readlink /proc/$$/fd/2); fi
-     if [ ! -z ${translate+x} ] && [ $verbose -eq 1 ]; then echo "Translate | frame(s) "${frame[@]} > $(readlink /proc/$$/fd/2); fi
-     if [ $translate_table -ne 1 ] && [ $verbose -eq 1 ]; then echo "Translation code: "$translate_table > $(readlink /proc/$$/fd/2); fi
-     if [ ! -z ${makebed+x} ] && [ $verbose -eq 1 ]; then echo "Output in BED format" > $(readlink /proc/$$/fd/2); fi
+     if [ $verbose -eq 1 ]; then echo "ORF | frame(s) "${frame[@]} >&2; fi
+     if [ ! -z ${translate+x} ] && [ $verbose -eq 1 ]; then echo "Translate | frame(s) "${frame[@]} >&2; fi
+     if [ $translate_table -ne 1 ] && [ $verbose -eq 1 ]; then echo "Translation code: "$translate_table >&2; fi
+     if [ ! -z ${makebed+x} ] && [ $verbose -eq 1 ]; then echo "Output in BED format" >&2; fi
      
      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
      
@@ -1513,12 +1513,12 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep -
 
      if [ $verbose -eq 1 ] && [ -z ${translate+x} ]
      then
-      echo -n "ORF detection done: " > $(readlink /proc/$$/fd/2)
+      echo -n "ORF detection done: " >&2
       show_time
      fi
      if [ $verbose -eq 1 ] && [ ! -z ${translate+x} ]
      then
-      echo -n "ORF detection and translation done: " > $(readlink /proc/$$/fd/2)
+      echo -n "ORF detection and translation done: " >&2
       show_time
      fi
      detect_mol $OUTFILE
@@ -1530,18 +1530,18 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep -
      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
      if [ $verbose -eq 1 ]
      then
-      echo "Translate | frame(s) "${frame[@]} > $(readlink /proc/$$/fd/2)
+      echo "Translate | frame(s) "${frame[@]} >&2
      fi
      if [ $verbose -eq 1 ] && [ $translate_table -ne 1 ]
      then
-      echo "Translation code: "$translate_table > $(readlink /proc/$$/fd/2)
+      echo "Translation code: "$translate_table >&2
      fi
      awk -F '' '{for(i=1; i<=NF; i+=3) {printf "%s%s ", $i,$(i+1)$(i+2);}; print ""}' $INFILE |
       translate - |
        tr --delete " [:lower:]" > $OUTFILE
        if [ $verbose -eq 1 ]
        then
-        echo -n "Translation done: " > $(readlink /proc/$$/fd/2)
+        echo -n "Translation done: " >&2
         show_time
        fi
        detect_mol $OUTFILE
@@ -1563,7 +1563,7 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep -
       random $INFILE > $OUTFILE
       if [ $verbose -eq 1 ]
       then
-       echo -n "Random sequence done: " > $(readlink /proc/$$/fd/2)
+       echo -n "Random sequence done: " >&2
        show_time
       fi
      fi
@@ -1626,7 +1626,7 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep -
       sort --ignore-case --parallel="$threads" --field-separator=$'\t' --unique --key=2,2 $INFILE > $OUTFILE
       if [ $verbose -eq 1 ]
       then
-       echo -n "Remove duplicates done: " > $(readlink /proc/$$/fd/2)
+       echo -n "Remove duplicates done: " >&2
        show_time
       fi
      fi
@@ -1636,14 +1636,14 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep -
      then
      if [ $verbose -eq 1 ]
      then
-      echo "Sort by name" > $(readlink /proc/$$/fd/2)
+      echo "Sort by name" >&2
      fi
       SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
       if [ ! -z ${reverse_sort+x} ]
       then
       if [ $verbose -eq 1 ]
       then
-       echo "Sort in reverse order" > $(readlink /proc/$$/fd/2)
+       echo "Sort in reverse order" >&2
       fi
        sort --parallel="$threads" --reverse --field-separator=$'\t' --key=1 $INFILE > $OUTFILE
       else
@@ -1651,7 +1651,7 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep -
       fi
       if [ $verbose -eq 1 ]
       then
-       echo -n "Name sort done: " > $(readlink /proc/$$/fd/2)
+       echo -n "Name sort done: " >&2
        show_time
       fi
      fi
@@ -1661,7 +1661,7 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep -
      then
       if [ $verbose -eq 1 ]
       then
-       echo "Sort by length" > $(readlink /proc/$$/fd/2)
+       echo "Sort by length" >&2
       fi
       SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH    
       awk -F '\t' '{OFS="\t"; print length($2),$0}' $INFILE |
@@ -1669,7 +1669,7 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep -
       then
       if [ $verbose -eq 1 ]
       then
-       echo "Sort in reverse order" > $(readlink /proc/$$/fd/2)
+       echo "Sort in reverse order" >&2
       fi
        sort --parallel="$threads" --field-separator=$'\t' --numeric-sort --reverse
       else
@@ -1678,7 +1678,7 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep -
       cut --fields=2,3 > $OUTFILE
       if [ $verbose -eq 1 ]
       then
-       echo -n "Length sort done: " > $(readlink /proc/$$/fd/2)
+       echo -n "Length sort done: " >&2
        show_time
       fi
      fi
@@ -1688,7 +1688,7 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep -
      then
       if [ $verbose -eq 1 ]
       then
-       echo "Sort by molecular weight" > $(readlink /proc/$$/fd/2)
+       echo "Sort by molecular weight" >&2
       fi
       SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
       paste <(cut --fields=2 $INFILE | calc_MW 1) $INFILE |
@@ -1696,7 +1696,7 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep -
       then
       if [ $verbose -eq 1 ]
       then
-       echo "Sort in reverse order" > $(readlink /proc/$$/fd/2)
+       echo "Sort in reverse order" >&2
       fi
        sort --parallel="$threads" --field-separator=$'\t' --numeric-sort --reverse
       else
@@ -1705,7 +1705,7 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep -
       cut --fields=2,3 > $OUTFILE
       if [ $verbose -eq 1 ]
       then
-       echo -n "Molecular weight sort done: " > $(readlink /proc/$$/fd/2)
+       echo -n "Molecular weight sort done: " >&2
        show_time
       fi
      fi
@@ -1715,13 +1715,13 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep -
      then
      if [ $verbose -eq 1 ]
      then
-      echo "Percent GC" > $(readlink /proc/$$/fd/2)
+      echo "Percent GC" >&2
      fi
      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
       paste <(cut --fields=1 $INFILE | tr --delete ">") <(cut --fields=2 $INFILE | awk '{var=length($0);gsub("[AaTt]","",$0);print length($0)/var*100}')
       if [ $verbose -eq 1 ]
       then
-       echo -n "GC fraction done: " > $(readlink /proc/$$/fd/2)
+       echo -n "GC fraction done: " >&2
        show_time
       fi
       exit 0
@@ -1730,7 +1730,7 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep -
      # Calculate molucular weight
     if [ ! -z ${MW+x} ]
     then
-    if [ $verbose -eq 1 ]; then echo "Calculating molecular weight" > $(readlink /proc/$$/fd/2); fi
+    if [ $verbose -eq 1 ]; then echo "Calculating molecular weight" >&2; fi
      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
      if [[ $MOLECULE == "DNA" ]] || [[ $MOLECULE = "RNA" ]]
      then
@@ -1739,12 +1739,12 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep -
      then
       paste <(cut --fields=1 $INFILE | tr --delete ">") <(cut --fields=2 $INFILE | calc_MW 1)
      else
-      echo "Error detecting molecule" > $(readlink /proc/$$/fd/2)
+      echo "Error detecting molecule" >&2
       exit 1
      fi
      if [ $verbose -eq 1 ]
       then
-       echo -n "Molecular weight done: " > $(readlink /proc/$$/fd/2)
+       echo -n "Molecular weight done: " >&2
        show_time
       fi
       exit 0
@@ -1754,7 +1754,7 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep -
      if [ ! -z ${renz+x} ] && [[ $MOLECULE != "PROTEIN" ]]
      then
      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
-     if [ $verbose -eq 1 ]; then echo "Detecting restriction sites" > $(readlink /proc/$$/fd/2); fi
+     if [ $verbose -eq 1 ]; then echo "Detecting restriction sites" >&2; fi
       if [[ "${min_max_re[0]=0}" =~ "list" ]]
        then
         res_enz $INFILE ${min_max_re[0]=0} ${min_max_re[1]=0} ${min_max_re[2]=0} ${min_max_re[3]=0} ${min_max_re[4]=0}
@@ -1766,7 +1766,7 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep -
       fi
       if [ $verbose -eq 1 ]
       then
-       echo -n "Restriction site detection done: " > $(readlink /proc/$$/fd/2)
+       echo -n "Restriction site detection done: " >&2
        show_time
       fi
       exit 0
@@ -1775,7 +1775,7 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep -
      # Separate sequences into files
      if [ ! -z ${separate+x} ]
      then
-     echo "Separating sequences into files" > $(readlink /proc/$$/fd/2)
+     echo "Separating sequences into files" >&2
       if [ ! -d $separate ]
       then
        mkdir -p $separate
@@ -1787,7 +1787,7 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep -
       done
       if [ $verbose -eq 1 ]
       then
-       echo -en "\nSequence separation done: " > $(readlink /proc/$$/fd/2)
+       echo -en "\nSequence separation done: " >&2
        show_time
       fi
       exit 0
@@ -1808,6 +1808,6 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep -
     
     if [ $verbose -eq 1 ]
     then
-     echo -ne "\nfastakit done: " > $(readlink /proc/$$/fd/2)
+     echo -ne "\nfastakit done: " >&2
      show_time
     fi
