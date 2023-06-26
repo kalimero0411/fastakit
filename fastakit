@@ -359,7 +359,7 @@ arg=$1
            's/a[tu]a/M/gi;
             s/ag[ag]/*/gi;
             s/cg[ac]/R/gi;
-            s/[tu]ga/W/gi;'
+            s/[tu]ga/W/gi'
        
          # Yeast mitochondrial code
          elif [[ $translate_table = 3 ]]
@@ -367,13 +367,13 @@ arg=$1
           sed --regexp-extended \
            's/a[tu]a/M/gi;
             s/c[tu][acgtun]/T/gi;
-            s/[tu]ga/W/gi;'
+            s/[tu]ga/W/gi'
        
          # Mold, protozoan, and coelenterate mitochondrial code and the mycoplasma/spiroplasma code
          elif [[ $translate_table = 4 ]]
           then
            sed --regexp-extended \
-            's/[tu]ga/M/gi;'
+            's/[tu]ga/M/gi'
           
          # Invertebrate Mitochondrial Code
           elif [[ $translate_table = 5 ]]
@@ -595,7 +595,7 @@ arg=$1
           "s/[^atcg]//gi;
            s/[at]/313.20672 304.19322 /gi;
            s/[cg]/289.18182 329.20592 /gi;
-           s/ $//g;"' |
+           s/ $//g"' |
            awk -F ' ' '{for(i=1;i<=NF;i++) t+=$i; printf "%.5f\n", t+2*(18.01528+78.972); t=0}'
          fi
          elif [[ $MOLECULE == "RNA" ]]
@@ -1176,10 +1176,16 @@ arg=$1
     if [ $# -ge 1 -a -f "$1" ]
     then
      FILE="$1"
-    else
+    elif [[ ! -t 0 ]]
+    then
      stdin=1
      FILE=$(mktemp --tmpdir=/tmp/fastakit.$script_pid fastakit.$script_pid.XXXXXXXXXX)
      cat - > $FILE
+    else
+     echo "No input provided" >&2
+     printf "$usage" |
+     awk -F $'\t' '{ printf "%-30s %s\n", $1, $2 }'
+     exit 1
     fi
     
     # Check if FASTA
