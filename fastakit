@@ -13,10 +13,11 @@ max_orf_num=0
 verbose=0
 
 # Cleanup temp files
-script_pid=$(echo $$)
-mkdir /tmp/fastakit.$script_pid
+rand=$(echo $RANDOM | md5sum | head -c 10)
+mkdir /tmp/fastakit.$rand
+tmpdir=/tmp/fastakit.$rand
 cleanup(){
- rm --force --recursive /tmp/fastakit.$script_pid
+ rm --force --recursive $tmpdir
 }
 trap cleanup EXIT
 
@@ -240,7 +241,7 @@ arg=$1
   shift 2
   ;;
   --makebed)
-  makebed=$(mktemp --tmpdir=/tmp/fastakit.$script_pid fastakit.$script_pid.XXXXXXXXXX)
+  makebed=$(mktemp --tmpdir=$tmpdir fastakit.XXXXXXXXXX)
   shift
   ;;
   --upstream)
@@ -622,11 +623,11 @@ arg=$1
      }
      
      function detect_mol(){
-     local input=$(mktemp --tmpdir=/tmp/fastakit.$script_pid fastakit.$script_pid.XXXXXXXXXX)
+     local input=$(mktemp --tmpdir=$tmpdir fastakit.XXXXXXXXXX)
      input=$1
      if [ $(head --bytes=5000000 $input | grep --ignore-case --max-count=1 --count --perl-regexp "[PLIFQE]") -eq 0 ]
      then
-      export MOL=$(mktemp --tmpdir=/tmp/fastakit.$script_pid fastakit.$script_pid.XXXXXXXXXX)
+      export MOL=$(mktemp --tmpdir=$tmpdir fastakit.XXXXXXXXXX)
       export input
       parallel -j2 --halt now,success=1 ::: \
       'grep --ignore-case --max-count=1 "T" $input > /dev/null && echo "DNA" > $MOL' \
@@ -640,9 +641,9 @@ arg=$1
      }
      
      function get_enz(){
-       local reheads=$(mktemp --tmpdir=/tmp/fastakit.$script_pid fastakit.$script_pid.XXXXXXXXXX)
-       local repat=$(mktemp --tmpdir=/tmp/fastakit.$script_pid fastakit.$script_pid.XXXXXXXXXX)
-       local retmp=$(mktemp --tmpdir=/tmp/fastakit.$script_pid fastakit.$script_pid.XXXXXXXXXX)
+       local reheads=$(mktemp --tmpdir=$tmpdir fastakit.XXXXXXXXXX)
+       local repat=$(mktemp --tmpdir=$tmpdir fastakit.XXXXXXXXXX)
+       local retmp=$(mktemp --tmpdir=$tmpdir fastakit.XXXXXXXXXX)
        if [ $verbose -eq 1 ]; then echo "Downloading restriction enzyme recognition sites..." >&2; fi
        wget --quiet --show-progress --output-document=- ftp://ftp.neb.com/pub/rebase/withref.txt |
        grep --perl-regexp "\<1\>|\<5\>" |
@@ -676,9 +677,9 @@ arg=$1
      }
      
      function res_enz(){
-      local input=$(mktemp --tmpdir=/tmp/fastakit.$script_pid fastakit.$script_pid.XXXXXXXXXX)
-      local reout=$(mktemp --tmpdir=/tmp/fastakit.$script_pid fastakit.$script_pid.XXXXXXXXXX)
-      local enztmp=$(mktemp --tmpdir=/tmp/fastakit.$script_pid fastakit.$script_pid.XXXXXXXXXX)
+      local input=$(mktemp --tmpdir=$tmpdir fastakit.XXXXXXXXXX)
+      local reout=$(mktemp --tmpdir=$tmpdir fastakit.XXXXXXXXXX)
+      local enztmp=$(mktemp --tmpdir=$tmpdir fastakit.XXXXXXXXXX)
       local is_enz='[[:alpha:]]'
       cut --fields=2 $1 > $input
       local enz_name=$2
@@ -774,7 +775,7 @@ arg=$1
      
      # Sequence statistics function
      function seq_stats(){
-     lengths=$(mktemp --tmpdir=/tmp/fastakit.$script_pid fastakit.$script_pid.XXXXXXXXXX)
+     lengths=$(mktemp --tmpdir=$tmpdir fastakit.XXXXXXXXXX)
      awk '{print length($0)}' $1 | sort -rn > $lengths
      total=$(awk '{OFS="\t"}; {sum+=$0}; END{printf "%.0f", sum}' $lengths)
      L50_idx=$(awk '{OFS="\t"}; {sum+=$0}; {printf "%s%s%.0f\n", NR,OFS,sum}' $lengths |
@@ -883,8 +884,8 @@ arg=$1
        
        if [[ $threads != 1 ]]
        then
-        local ORFHEADERS=$(mktemp --tmpdir=/tmp/fastakit.$script_pid fastakit.$script_pid.XXXXXXXXXX)
-        local ORFFILE1=$(mktemp --tmpdir=/tmp/fastakit.$script_pid fastakit.$script_pid.XXXXXXXXXX)
+        local ORFHEADERS=$(mktemp --tmpdir=$tmpdir fastakit.XXXXXXXXXX)
+        local ORFFILE1=$(mktemp --tmpdir=$tmpdir fastakit.XXXXXXXXXX)
         sed --quiet ''"$ORFstart"','"$ORFend"'p;'"$(($ORFend + 1))"'q' $4 > $ORFFILE1
         sed --quiet ''"$ORFstart"','"$ORFend"'p;'"$(($ORFend + 1))"'q' $5 > $ORFHEADERS
        else
@@ -894,7 +895,7 @@ arg=$1
        
        if [ ! -z ${makebed+x} ]
        then
-        local seq_length_orf=$(mktemp --tmpdir=/tmp/fastakit.$script_pid fastakit.$script_pid.XXXXXXXXXX)
+        local seq_length_orf=$(mktemp --tmpdir=$tmpdir fastakit.XXXXXXXXXX)
         if [[ $threads != 1 ]]
         then
          sed --quiet ''"$ORFstart"','"$ORFend"'p;'"$(($ORFend + 1))"'q' $6 > $seq_length_orf
@@ -918,7 +919,7 @@ arg=$1
           } END{if(orf_core == 0 && verbose == 1) print "\n" > "/dev/tty"}' > ${!outcore_orf}
        if [ $orf_core -eq 0 ] && [ $verbose -eq 1 ]; then echo "" >&2; fi
        else
-        local ORFFILE2=$(mktemp --tmpdir=/tmp/fastakit.$script_pid fastakit.$script_pid.XXXXXXXXXX)
+        local ORFFILE2=$(mktemp --tmpdir=$tmpdir fastakit.XXXXXXXXXX)
         paste $ORFHEADERS <(awk -F '' '{for(i=1; i<=NF; i+=3) {printf "%s%s ", $i,$(i+1)$(i+2);}; print ""}' $ORFFILE1) |
         if [ ! -z ${upstream+x} ]
         then
@@ -1003,7 +1004,7 @@ arg=$1
        
        if [[ $threads != 1 ]]
        then
-        local ORFFILE1=$(mktemp --tmpdir=/tmp/fastakit.$script_pid fastakit.$script_pid.XXXXXXXXXX)
+        local ORFFILE1=$(mktemp --tmpdir=$tmpdir fastakit.XXXXXXXXXX)
         sed --quiet ''"$ORFstart"','"$ORFend"'p;'"$(($ORFend + 1))"'q' $4 > $ORFFILE1
        else
         ORFFILE1=$4
@@ -1179,7 +1180,7 @@ arg=$1
     elif [[ ! -t 0 ]]
     then
      stdin=1
-     FILE=$(mktemp --tmpdir=/tmp/fastakit.$script_pid fastakit.$script_pid.XXXXXXXXXX)
+     FILE=$(mktemp --tmpdir=$tmpdir fastakit.XXXXXXXXXX)
      cat - > $FILE
     else
      echo "No input provided" >&2
@@ -1208,9 +1209,9 @@ arg=$1
      exit 0
     fi
 
-    HEADERS=$(mktemp --tmpdir=/tmp/fastakit.$script_pid fastakit.$script_pid.XXXXXXXXXX)
-    INFILE=$(mktemp --tmpdir=/tmp/fastakit.$script_pid fastakit.$script_pid.XXXXXXXXXX)
-    OUTFILE=$(mktemp --tmpdir=/tmp/fastakit.$script_pid fastakit.$script_pid.XXXXXXXXXX)
+    HEADERS=$(mktemp --tmpdir=$tmpdir fastakit.XXXXXXXXXX)
+    INFILE=$(mktemp --tmpdir=$tmpdir fastakit.XXXXXXXXXX)
+    OUTFILE=$(mktemp --tmpdir=$tmpdir fastakit.XXXXXXXXXX)
     
     if [ $verbose -eq 1 ]; then echo -en "Using "$threads" thread(s)\n\n" >&2; fi
 
@@ -1305,7 +1306,7 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep -
     if [ ! -z ${get_names+x} ]
     then
      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
-     HEADERS_TMP=$(mktemp --tmpdir=/tmp/fastakit.$script_pid fastakit.$script_pid.XXXXXXXXXX)
+     HEADERS_TMP=$(mktemp --tmpdir=$tmpdir fastakit.XXXXXXXXXX)
      awk -v get_names="$get_names" -F $'\t' '{OFS="\t"}; $1 ~ get_names{print $0}' <(paste $HEADERS $INFILE) |
      tee >(cut --fields=1 > $HEADERS_TMP) |
      cut --fields=2 > $OUTFILE
@@ -1413,8 +1414,8 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep -
      if [ "${#frame[@]}" -ne 1 ] || [ ${frame[0]} -ne 1 ]
      then
      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
-     ADD_frame=$(mktemp --tmpdir=/tmp/fastakit.$script_pid fastakit.$script_pid.XXXXXXXXXX)
-     ADD_headers=$(mktemp --tmpdir=/tmp/fastakit.$script_pid fastakit.$script_pid.XXXXXXXXXX)
+     ADD_frame=$(mktemp --tmpdir=$tmpdir fastakit.XXXXXXXXXX)
+     ADD_headers=$(mktemp --tmpdir=$tmpdir fastakit.XXXXXXXXXX)
      if [[ "${frame[@]}" =~ 1 ]]
      then
       cat $INFILE >> $ADD_frame
@@ -1432,7 +1433,7 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep -
      fi
      if [[ "${frame[@]}" =~ 4 ]] || [[ "${frame[@]}" =~ 5 ]] || [[ "${frame[@]}" =~ 6 ]]
      then
-      INFILE_revcomp=$(mktemp --tmpdir=/tmp/fastakit.$script_pid fastakit.$script_pid.XXXXXXXXXX)
+      INFILE_revcomp=$(mktemp --tmpdir=$tmpdir fastakit.XXXXXXXXXX)
       fun_rev $INFILE |
       fun_comp > $INFILE_revcomp
       if [[ "${frame[@]}" =~ 4 ]]
@@ -1473,13 +1474,13 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep -
      thread_calc $HEADERS
      
      # Loop for function getting ORFs for multithreading
-     HEADERS_TMP=$(mktemp --tmpdir=/tmp/fastakit.$script_pid fastakit.$script_pid.XXXXXXXXXX)
+     HEADERS_TMP=$(mktemp --tmpdir=$tmpdir fastakit.XXXXXXXXXX)
      : > $OUTFILE
 
       for ((core=0;core <= $(($threads - 1));core++))
       do
-       declare OUTCORE$core=$(mktemp --tmpdir=/tmp/fastakit.$script_pid fastakit.$script_pid.XXXXXXXXXX)
-       declare HEADCORE$core=$(mktemp --tmpdir=/tmp/fastakit.$script_pid fastakit.$script_pid.XXXXXXXXXX)
+       declare OUTCORE$core=$(mktemp --tmpdir=$tmpdir fastakit.XXXXXXXXXX)
+       declare HEADCORE$core=$(mktemp --tmpdir=$tmpdir fastakit.XXXXXXXXXX)
        if [ ! -z ${makebed+x} ]
        then
         orf_search ${start[$core]} ${end[$core]} $core $INFILE $HEADERS <(awk -F $'\t' '{print length($0)}' $INFILE) &
@@ -1589,8 +1590,8 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep -
     
     for ((core=0;core <= $(($threads - 1));core++))
      do
-      declare OUTCORE$core=$(mktemp --tmpdir=/tmp/fastakit.$script_pid fastakit.$script_pid.XXXXXXXXXX)
-      declare HEADCORE$core=$(mktemp --tmpdir=/tmp/fastakit.$script_pid fastakit.$script_pid.XXXXXXXXXX)
+      declare OUTCORE$core=$(mktemp --tmpdir=$tmpdir fastakit.XXXXXXXXXX)
+      declare HEADCORE$core=$(mktemp --tmpdir=$tmpdir fastakit.XXXXXXXXXX)
       extract_fun ${start[$core]} ${end[$core]} $core $INFILE &
       pids[$core]=$!
      done
