@@ -6,47 +6,47 @@ fastakit [OPTIONS]... [Sequence.fasta]
 ```
 
 ## Options
-| Short     | Long      | Description     |
+| Short     | Long &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;    | Description     |
 | ------------- | ------------- | -------- |
-| -i          | --in-place         | Modify file in-place  |
-| -c           | --complement         | Complementary sequence  |
-| -m           | --reverse_seq         | Reverse sequence  |
-|           | --unique         | Remove duplicate sequences  |
-|           | --multi #         | Convert to multi-line FASTA (nucleotide only)  |
-|            | --random         | Create random sequences of respective length  |
-| -n          | --name_sort         | Sort FASTA by name  |
-| -l           | --length_sort         | Sort FASTA by sequence length (shortest to longest)  |
-| -r           | --reverse_sort         | Sort in reverse order  |
-|            | --upper         | Sequences to UPPERCASE  |
-|            | --lower         | Sequences to lowercase  |
-| -g           | --orf         | Retrieve ORFs  |
-|            | --max_orf_num #         | Maximum number of ORFs to output per sequence  |
-| -p           | --translate         | Protein sequences in current frame  |
-|            | --table #        | Translation code (Default = standard code; '--table list' for all available codes)  |
-|            | --frame #        | Frame to extract codons (Any of frames 1,2,3,4,5,6; 0 = six frames; Default = 1)  |
-|            | --gc        | Calculate percent GC per sequence (Disables --translate)  |
-|            | --mw        | Calculate the moleculare weight of DNA/RNA/protein per sequence (ss ds)  |
-|            | --mw_sort        | Sort by molecular weight  |
-|            | --separate [DIR]        | Separate sequnces into files in directory DIR  |
-|            | --nonnuc        | Count non-ACTGU characters per sequence  |
-|            | --rna_dna        | Convert RNA to DNA / DNA to RNA (Default = no conversion)  |
-|            | --seq_range #,#        | Minimum/Maximum sequence size (e.g. 10,50 ; 0 to ignore)  |
-|            | --max_seq #        | Return the # of largest sequences for each input sequence (ORFs, proteins, etc.)  |
-|            | --name_regex [string]        | Truncate FASTA header with regex (used with --max_seq)  |
-|            | --get_names [string]        | Return the sequences with names that match a string (perl regex)  |
-|            | --check        | Check if FASTA file is single line  |
-|            | --makebed        | Create BED output for ORFs (Defaults to --orf)  |
-|            | --upstream #        | Retrieve # size upstream flanking sequence of ORFs (Assumes --orf)  |
-|            | --downstream #        | Retrieve # size downstream flanking sequence of ORFs (Assumes --orf)  |
-|            | --detect        | Detect molucule and exit  |
-|            | --rename [string]        | Change all sequence names to [string]_# (e.g. '--rename test', will give '>test_1' etc.)  |
-|            | --extract        | Extract contiguous sequences from each sequence (1 = lowercase; 2 = UPPERCASE)  |
-|            | --re {string},#,#,#,#        | Detect restriction enzyme recognition sites (Restriction enzyme name, min_length, max_length, min_number, max_number; 0 to ignore; 'list' to list all enzymes)  |
-|            | --stats        | Calculate basic stats  |
-|            | --version        | Print version date  |
-| -t           | --threads #        | Number of CPU threads to use (Default = Detected processors or 1)  |
-| -v           | --verbose       | Verbose  |
-| -h           | --help       | Display help  |
+| `-i`          | `--in-place`         | Modify file in-place  |
+| `-c`           | `--complement`         | Complementary sequence  |
+| `-m`           | `--reverse_seq`         | Reverse sequence  |
+|           | `--unique`         | Remove duplicate sequences  |
+|           | `--multi #`         | Convert to multi-line FASTA (nucleotide only)  |
+|            | `--random`         | Create random sequences of respective length  |
+| `-n`          | `--name_sort`         | Sort FASTA by name  |
+| `-l`           | `--length_sort`         | Sort FASTA by sequence length (shortest to longest)  |
+| `-r`           | `--reverse_sort`         | Sort in reverse order  |
+|            | `--upper`         | Sequences to UPPERCASE  |
+|            | `--lower`         | Sequences to lowercase  |
+| `-g`           | `--orf`         | Retrieve ORFs  |
+|            | `--max_orf_num #`         | Maximum number of ORFs to output per sequence  |
+| `-p`           | `--translate`         | Protein sequences in current frame  |
+|            | `--table #`        | Translation code (Default = standard code; '--table list' for all available codes)  |
+|            | `--frame #`        | Frame to extract codons (Any of frames 1,2,3,4,5,6; 0 = six frames; Default = 1)  |
+|            | `--gc`        | Calculate percent GC per sequence (Disables --translate)  |
+|            | `--mw`        | Calculate the moleculare weight of DNA/RNA/protein per sequence (ss ds)  |
+|            | `--mw_sort`        | Sort by molecular weight  |
+|            | `--separate [DIR]`        | Separate sequnces into files in directory DIR  |
+|            | `--nonnuc`        | Count non-ACTGU characters per sequence  |
+|            | `--rna_dna`        | Convert RNA to DNA / DNA to RNA (Default = no conversion)  |
+|            | `--seq_range #,#`        | Minimum/Maximum sequence size (e.g. 10,50 ; 0 to ignore)  |
+|            | `--max_seq #`        | Return the # of largest sequences for each input sequence (ORFs, proteins, etc.)  |
+|            | `--name_regex [string]`        | Truncate FASTA header with regex (used with --max_seq)  |
+|            | `--get_names [string]`        | Return the sequences with names that match a string (perl regex)  |
+|            | `--check`        | Check if FASTA file is single line  |
+|            | `--makebed`        | Create BED output for ORFs (Defaults to --orf)  |
+|            | `--upstream #`        | Retrieve # size upstream flanking sequence of ORFs (Assumes --orf)  |
+|            | `--downstream #`        | Retrieve # size downstream flanking sequence of ORFs (Assumes --orf)  |
+|            | `--detect`        | Detect molucule and exit  |
+|            | `--rename [string]`        | Change all sequence names to [string]_# (e.g. '--rename test', will give '>test_1' etc.)  |
+|            | `--extract`        | Extract contiguous sequences from each sequence (1 = lowercase; 2 = UPPERCASE)  |
+|            | `--re {string},#,#,#,#`        | Detect restriction enzyme recognition sites (Restriction enzyme name, min_length, max_length, min_number, max_number; 0 to ignore; 'list' to list all enzymes)  |
+|            | `--stats`        | Calculate basic stats  |
+|            | `--version`        | Print version date  |
+| `-t`           | `--threads #`        | Number of CPU threads to use (Default = Detected processors or 1)  |
+| `-v`           | `--verbose`       | Verbose  |
+| `-h`           | `--help`       | Display help  |
 
 
 ## Examples
