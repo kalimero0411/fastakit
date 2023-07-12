@@ -6,7 +6,7 @@ fastakit [OPTIONS]... [Sequence.fasta]
 ```
 
 ## Options
-| Short     | Long &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;    | Description     |
+| Short     | Long &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;    | Description     |
 | ------------- | ------------- | -------- |
 | `-i`          | `--in-place`         | Modify file in-place  |
 | `-c`           | `--complement`         | Complementary sequence  |
