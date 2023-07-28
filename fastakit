@@ -13,9 +13,8 @@ max_orf_num=0
 verbose=0
 
 # Cleanup temp files
-rand=$(echo $RANDOM | md5sum | head -c 10)
-mkdir /tmp/fastakit.$rand
-tmpdir=/tmp/fastakit.$rand
+tmpdir=$(mktemp --tmpdir=/tmp --directory fastakit.XXXXXXXXXX)
+chmod --recursive 775 $tmpdir
 cleanup(){
  rm --force --recursive $tmpdir
 }
