@@ -1173,9 +1173,17 @@ arg=$1
 ##################################################################
 
     # Get input files    
-    if [ $# -ge 1 -a -f "$1" ]
+    if [ $# -ge 1 ]
     then
-     FILE="$1"
+     if [ -f "$1" ] || [ -p "/dev/fd/${1#/dev/fd/}" ]
+     then
+      FILE="$1"
+     else
+      echo "Invalid input provided" >&2
+      printf "$usage" |
+      awk -F $'\t' '{ printf "%-30s %s\n", $1, $2 }'
+      exit 1
+     fi
     elif [[ ! -t 0 ]]
     then
      stdin=1
