@@ -1289,21 +1289,21 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep -
     then
      if [ ! -z ${procsub+x} ]
      then
-      parallel -a $FILE -k -j"$threads" --block 30M --pipe 'grep --perl-regexp --invert-match "^>"' |
+      parallel -a $FILE -k -j"$threads" --block 30M --pipe 'grep --perl-regexp --invert-match "^>"'
       tr --delete " " > $OUTFILE
      else
-      parallel -a $FILE -k -j"$threads" --block 30M --pipepart 'grep --perl-regexp --invert-match "^>"' |
+      parallel -a $FILE -k -j"$threads" --block 30M --pipepart 'grep --perl-regexp --invert-match "^>"'
       tr --delete " " > $OUTFILE
-     fi
+     fi |
     elif [[ $lettercase = 1 ]]
     then
      if [ $verbose -eq 1 ]; then echo "Converting to upper-case FASTA" >&2; fi
      if [ ! -z ${procsub+x} ]
      then
-      parallel -a $FILE -k -j"$threads" --block 30M --pipe 'grep --perl-regexp --invert-match "^>"' |
+      parallel -a $FILE -k -j"$threads" --block 30M --pipe 'grep --perl-regexp --invert-match "^>"'
      else
-      parallel -a $FILE -k -j"$threads" --block 30M --pipepart 'grep --perl-regexp --invert-match "^>"' |
-     fi
+      parallel -a $FILE -k -j"$threads" --block 30M --pipepart 'grep --perl-regexp --invert-match "^>"'
+     fi |
      tr "[:lower:]" "[:upper:]" |
      tr --delete " " > $OUTFILE
     elif [[ $lettercase = 2 ]]
@@ -1311,10 +1311,10 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep -
      if [ $verbose -eq 1 ]; then echo "Converting to lower-case FASTA" >&2; fi
      if [ ! -z ${procsub+x} ]
      then
-      parallel -a $FILE -k -j"$threads" --block 30M --pipe 'grep --perl-regexp --invert-match "^>"' |
+      parallel -a $FILE -k -j"$threads" --block 30M --pipe 'grep --perl-regexp --invert-match "^>"'
      else
-      parallel -a $FILE -k -j"$threads" --block 30M --pipepart 'grep --perl-regexp --invert-match "^>"' |
-     fi
+      parallel -a $FILE -k -j"$threads" --block 30M --pipepart 'grep --perl-regexp --invert-match "^>"'
+     fi |
      tr "[:upper:]" "[:lower:]" |
      tr --delete " " > $OUTFILE
     fi
