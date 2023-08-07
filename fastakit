@@ -2,7 +2,7 @@
 #set -x
 
 # Default parameters
-version=23.05
+version=23.08
 fastakit_dir=$(echo $(dirname $(readlink --canonicalize $(which fastakit))))
 time_start=$(date +%s)
 threads=$(command -v nproc --all &> /dev/null && nproc || echo 1)
