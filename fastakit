@@ -1180,8 +1180,9 @@ arg=$1
       FILE="$1"
      elif [ -p "/dev/fd/${1#/dev/fd/}" ]
      then
-      FILE="$1"
-      procsub=1
+      stdin=1
+      FILE=$(mktemp --tmpdir=$tmpdir fastakit.XXXXXXXXXX)
+      cat "$1" > $FILE
      else
       echo "Invalid input provided" >&2
       printf "$usage" |
@@ -1231,12 +1232,7 @@ arg=$1
      echo ">"$rename"_"$(seq -s "@>"$rename"_" $(grep --count --perl-regexp "^>" $FILE)) |
      tr "@" "\n" > $HEADERS
     else
-    if [ ! -z ${procsub+x} ]
-    then
-     parallel -a $FILE -k -j"$threads" --block 30M --pipe 'grep --perl-regexp "^>"' > $HEADERS
-    else
      parallel -a $FILE -k -j"$threads" --block 30M --pipepart 'grep --perl-regexp "^>"' > $HEADERS
-    fi
     fi
     
 if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep --count ">") != $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep --count --invert-match ">") ]] || [[ $(wc --lines $HEADERS | cut --fields=1 --delimiter=" ") != $(grep --count --invert-match ">" $FILE) ]]
@@ -1287,34 +1283,18 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep -
      if [ $verbose -eq 1 ]; then echo "Skipping single line FASTA conversion" >&2; fi
     if [[ $lettercase = 0 ]]
     then
-     if [ ! -z ${procsub+x} ]
-     then
-      parallel -a $FILE -k -j"$threads" --block 30M --pipe 'grep --perl-regexp --invert-match "^>"' |
-      tr --delete " " > $OUTFILE
-     else
-      parallel -a $FILE -k -j"$threads" --block 30M --pipepart 'grep --perl-regexp --invert-match "^>"' |
-      tr --delete " " > $OUTFILE
-     fi
+     parallel -a $FILE -k -j"$threads" --block 30M --pipepart 'grep --perl-regexp --invert-match "^>"' |
+     tr --delete " " > $OUTFILE
     elif [[ $lettercase = 1 ]]
     then
      if [ $verbose -eq 1 ]; then echo "Converting to upper-case FASTA" >&2; fi
-     if [ ! -z ${procsub+x} ]
-     then
-      parallel -a $FILE -k -j"$threads" --block 30M --pipe 'grep --perl-regexp --invert-match "^>"'
-     else
-      parallel -a $FILE -k -j"$threads" --block 30M --pipepart 'grep --perl-regexp --invert-match "^>"'
-     fi |
+     parallel -a $FILE -k -j"$threads" --block 30M --pipepart 'grep --perl-regexp --invert-match "^>"' |
      tr "[:lower:]" "[:upper:]" |
      tr --delete " " > $OUTFILE
     elif [[ $lettercase = 2 ]]
     then
      if [ $verbose -eq 1 ]; then echo "Converting to lower-case FASTA" >&2; fi
-     if [ ! -z ${procsub+x} ]
-     then
-      parallel -a $FILE -k -j"$threads" --block 30M --pipe 'grep --perl-regexp --invert-match "^>"'
-     else
-      parallel -a $FILE -k -j"$threads" --block 30M --pipepart 'grep --perl-regexp --invert-match "^>"'
-     fi |
+      parallel -a $FILE -k -j"$threads" --block 30M --pipepart 'grep --perl-regexp --invert-match "^>"' |
      tr "[:upper:]" "[:lower:]" |
      tr --delete " " > $OUTFILE
     fi
