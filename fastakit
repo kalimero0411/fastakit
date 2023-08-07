@@ -1191,7 +1191,7 @@ arg=$1
     # Check if FASTA
     if [ $(head --lines=1 $FILE | grep --count --perl-regexp "^>") -eq 0 ]
     then
-     echo -e "File doesn't start file a '>' \nIs this a FASTA file?" >&2
+     echo -e "File doesn't start with '>' \nIs this a FASTA file?" >&2
      exit 1
     fi
     
