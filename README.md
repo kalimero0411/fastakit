@@ -39,7 +39,7 @@ fastakit [OPTIONS]... [Sequence.fasta]
 |            | `--upstream #`        | Retrieve # size upstream flanking sequence of ORFs (Assumes --orf)  |
 |            | `--downstream #`        | Retrieve # size downstream flanking sequence of ORFs (Assumes --orf)  |
 |            | `--detect`        | Detect molucule and exit  |
-|            | `--rename [string]`        | Change all sequence names to [string]_# (e.g. '--rename test', will give '>test_1' etc.)  |
+|            | `--rename [string]`        | Change all sequence names to [string]_# (e.g. '--rename test', will give '>test1' etc.)  |
 |            | `--extract`        | Extract contiguous sequences from each sequence (1 = lowercase; 2 = UPPERCASE)  |
 |            | `--re {string},#,#,#,#`        | Detect restriction enzyme recognition sites (Restriction enzyme name, min_length, max_length, min_number, max_number; 0 to ignore; 'list' to list all enzymes)  |
 |            | `--stats`        | Calculate basic stats  |

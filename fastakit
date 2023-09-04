@@ -2,7 +2,7 @@
 #set -x
 
 # Default parameters
-version=23.08
+version=23.09
 fastakit_dir=$(echo $(dirname $(readlink --canonicalize $(which fastakit))))
 time_start=$(date +%s)
 threads=$(command -v nproc --all &> /dev/null && nproc || echo 1)
@@ -54,7 +54,7 @@ Usage: fastakit [OPTION]... [Sequence.fasta]\n
     --upstream\t Retrieve # size upstream flanking sequence of ORFs (Assumes --orf)
     --downstream #\t Retrieve # size downstream flanking sequence of ORFs (Assumes --orf)
     --detect\t Detect molucule and exit
-    --rename [string]\t Change all sequence names to {string}_ (e.g. '--rename test', will give '>test_1' etc.)
+    --rename [string]\t Change all sequence names to {string}_ (e.g. '--rename test', will give '>test1' etc.)
     --extract\t Extract contiguous sequences from each sequence (1 = lowercase; 2 = UPPERCASE)
     --re [string],,#,#,#\t Detect restriction enzyme recognition sites\n\t (Restriction enzyme name, min_length, max_length, min_number, max_number; 0 to ignore; 'list' to list all enzymes)
     --stats\t Calculate basic stats
@@ -1229,7 +1229,7 @@ arg=$1
 
     if [ ! -z ${rename+x} ]
     then
-     echo ">"$rename"_"$(seq -s "@>"$rename"_" $(grep --count --perl-regexp "^>" $FILE)) |
+     echo ">"$rename$(seq -s "@>"$rename $(grep --count --perl-regexp "^>" $FILE)) |
      tr "@" "\n" > $HEADERS
     else
      parallel -a $FILE -k -j"$threads" --block 30M --pipepart 'grep --perl-regexp "^>"' > $HEADERS
