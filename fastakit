@@ -2,7 +2,7 @@
 set -e
 
 # Default parameters
-version=23.09
+version=23.10
 fastakit_dir=$(echo $(dirname $(readlink --canonicalize $(which fastakit))))
 time_start=$(date +%s)
 threads=$(command -v nproc --all &> /dev/null && nproc || echo 1)
@@ -785,19 +785,18 @@ arg=$1
      head -1)
      num_seq=$(cat $lengths | wc -l)
      half_num=$(awk -v num_seq=$num_seq 'NR==(int(num_seq/2)+1){printf $0}' $lengths)
-     echo -e "Total length\t"$total >&2
-     echo -e "Sequence #\t"$num_seq >&2
-     echo -e "Longest sequence\t"$(head -1 $lengths) >&2
-     echo -e "Shortest sequence\t"$(tail -1 $lengths) >&2
+     echo -e "Total length\t"$total
+     echo -e "Sequence #\t"$num_seq
+     echo -e "Longest sequence\t"$(head -1 $lengths)
+     echo -e "Shortest sequence\t"$(tail -1 $lengths)
      echo -e "Median\t"$(awk -v num_seq=$num_seq -v half_num=$half_num \
-     'NR==int(num_seq/2){if(num_seq/2 == int(num_seq/2)) printf "%.1f", ($0+half_num)/2; else printf "%.0f", $0}' $lengths) >&2
-     echo -e "Mean\t"$(bc <<< "scale=2; $total/$num_seq") >&2
-     echo -e "GC%\t"$(bc <<< "scale=2; $(cat $1 | tr --delete --complement "[GgCc]" | wc -m)*100/$(cat $1 | tr --delete --complement "[AaTtGgCcUu]" | wc -m)") \
-     >&2
-     echo -e "N50\t"$(awk -v L50_idx=$L50_idx 'NR==L50_idx{printf "%.0f", $0}' $lengths) >&2
-     echo -e "L50\t"$L50_idx >&2
-     echo -e "N90\t"$(awk -v L90_idx=$L90_idx 'NR==L90_idx{printf "%.0f", $0}' $lengths) >&2
-     echo -e "L90\t"$L90_idx >&2
+     'NR==int(num_seq/2){if(num_seq/2 == int(num_seq/2)) printf "%.1f", ($0+half_num)/2; else printf "%.0f", $0}' $lengths)
+     echo -e "Mean\t"$(bc <<< "scale=2; $total/$num_seq")
+     echo -e "GC%\t"$(bc <<< "scale=2; $(cat $1 | tr --delete --complement "[GgCc]" | wc -m)*100/$(cat $1 | tr --delete --complement "[AaTtGgCcUu]" | wc -m)")
+     echo -e "N50\t"$(awk -v L50_idx=$L50_idx 'NR==L50_idx{printf "%.0f", $0}' $lengths)
+     echo -e "L50\t"$L50_idx
+     echo -e "N90\t"$(awk -v L90_idx=$L90_idx 'NR==L90_idx{printf "%.0f", $0}' $lengths)
+     echo -e "L90\t"$L90_idx
      }
      
      # Complementary sequnce function
@@ -1357,18 +1356,7 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep -
       fi
      exit 0
     fi
-    
-    if [ ! -z ${stats+x} ]
-    then
-     seq_stats $OUTFILE
-     if [ $verbose -eq 1 ]
-      then
-       echo -n "Sequence statistics done: " >&2
-       show_time
-      fi
-     exit 0
-    fi
-    
+        
      # Get complementary sequences
      if [ ! -z ${complement+x} ]
      then
@@ -1812,6 +1800,17 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep -
       exit 0
      fi
      
+    if [ ! -z ${stats+x} ]
+    then
+     seq_stats $OUTFILE
+     if [ $verbose -eq 1 ]
+      then
+       echo -n "Sequence statistics done: " >&2
+       show_time
+      fi
+     exit 0
+    fi
+    
      # Convert tabbed to FASTA
      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
      cat $INFILE |
