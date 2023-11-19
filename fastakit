@@ -2,7 +2,7 @@
 set -e
 
 # Default parameters
-version=23.10
+version=23.11
 fastakit_dir=$(echo $(dirname $(readlink --canonicalize $(which fastakit))))
 time_start=$(date +%s)
 threads=$(command -v nproc --all &> /dev/null && nproc || echo 1)
@@ -1231,11 +1231,13 @@ arg=$1
      echo ">"$rename$(seq -s "@>"$rename $(grep --count --perl-regexp "^>" $FILE)) |
      tr "@" "\n" > $HEADERS
     else
-     parallel -a $FILE -k -j"$threads" --block 30M --pipepart 'grep --perl-regexp "^>"' > $HEADERS
+     grep ">" $FILE > $HEADERS
     fi
+
     
 if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep --count ">") != $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep --count --invert-match ">") ]] || [[ $(wc --lines $HEADERS | cut --fields=1 --delimiter=" ") != $(grep --count --invert-match ">" $FILE) ]]
     then
+    
      if [ $verbose -eq 1 ]; then echo "FASTA file is NOT single line" >&2; fi
      if [ ! -z ${check_sl+x} ]; then exit 1; fi
 
@@ -1244,7 +1246,7 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep -
     then
      if [ $verbose -eq 1 ]; then echo "Converting to single line FASTA" >&2; fi
      perl -pe '$. > 1 and /^>/ ? print "\n" : chomp' $FILE |
-     grep --perl-regexp --invert-match "^>" |
+     grep --invert-match ">" |
      tr --delete " " > $OUTFILE
      
     # Convert to upper-case
@@ -1252,7 +1254,7 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep -
      then
       if [ $verbose -eq 1 ]; then echo "Converting to upper-case single line FASTA" >&2; fi
       perl -pe '$. > 1 and /^>/ ? print "\n" : chomp' $FILE |
-      grep --perl-regexp --invert-match "^>" |
+      grep --invert-match ">" |
       tr "[:lower:]" "[:upper:]" |
       tr --delete " " > $OUTFILE
       
@@ -1261,7 +1263,7 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep -
       then
        if [ $verbose -eq 1 ]; then echo "Converting to lower-case single line FASTA" >&2; fi
        perl -pe '$. > 1 and /^>/ ? print "\n" : chomp' $FILE |
-       grep --perl-regexp --invert-match "^>" |
+       grep --invert-match ">" |
        tr "[:upper:]" "[:lower:]" |
        tr --delete " " > $OUTFILE
       
@@ -1280,20 +1282,19 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep -
      if [ $verbose -eq 1 ]; then echo "FASTA file is single line" >&2; fi
      if [ ! -z ${check_sl+x} ]; then exit 0; fi
      if [ $verbose -eq 1 ]; then echo "Skipping single line FASTA conversion" >&2; fi
+     if [ $verbose -eq 1 ] && [[ $lettercase = 1 ]]; then echo "Converting to UPPER-case FASTA" >&2; fi
+     if [ $verbose -eq 1 ] && [[ $lettercase = 2 ]]; then echo "Converting to lower-case FASTA" >&2; fi
+
+    grep --invert-match ">" $FILE |
     if [[ $lettercase = 0 ]]
     then
-     parallel -a $FILE -k -j"$threads" --block 30M --pipepart 'grep --perl-regexp --invert-match "^>"' |
      tr --delete " " > $OUTFILE
     elif [[ $lettercase = 1 ]]
     then
-     if [ $verbose -eq 1 ]; then echo "Converting to upper-case FASTA" >&2; fi
-     parallel -a $FILE -k -j"$threads" --block 30M --pipepart 'grep --perl-regexp --invert-match "^>"' |
      tr "[:lower:]" "[:upper:]" |
      tr --delete " " > $OUTFILE
     elif [[ $lettercase = 2 ]]
     then
-     if [ $verbose -eq 1 ]; then echo "Converting to lower-case FASTA" >&2; fi
-      parallel -a $FILE -k -j"$threads" --block 30M --pipepart 'grep --perl-regexp --invert-match "^>"' |
      tr "[:upper:]" "[:lower:]" |
      tr --delete " " > $OUTFILE
     fi
