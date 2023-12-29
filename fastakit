@@ -2,7 +2,7 @@
 set -e
 
 # Default parameters
-version=23.11
+version=23.12
 fastakit_dir=$(echo $(dirname $(readlink --canonicalize $(which fastakit))))
 time_start=$(date +%s)
 threads=$(command -v nproc --all &> /dev/null && nproc || echo 1)
@@ -1268,7 +1268,7 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep -
       
      fi
      
-     if [ -z ${verbose+x} ]
+     if [ ! -z ${verbose+x} ]
      then
       echo -n "Single line conversion done: " >&2
       show_time
@@ -1803,7 +1803,8 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep -
      
     if [ ! -z ${stats+x} ]
     then
-     seq_stats $OUTFILE
+     cut --field=2 $OUTFILE > $INFILE
+     seq_stats $INFILE
      if [ ! -z ${verbose+x} ]
       then
        echo -n "Sequence statistics done: " >&2
