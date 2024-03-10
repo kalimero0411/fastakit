@@ -35,7 +35,7 @@ fastakit [OPTIONS]... [Sequence.fasta]
 |            | `--name_regex [string]`        | Truncate FASTA header with regex (used with --max_seq)  |
 |            | `--get_names [string]`        | Return the sequences with names that match a string (perl regex)  |
 |            | `--check`        | Check if FASTA file is single line  |
-|            | `--makebed`        | Create BED output for ORFs (Defaults to --orf)  |
+|            | `--makeanno [string]`        | Create BED/GFF/GTF output for ORFs (Defaults to --orf and BED format)  |
 |            | `--upstream #`        | Retrieve # size upstream flanking sequence of ORFs (Assumes --orf)  |
 |            | `--downstream #`        | Retrieve # size downstream flanking sequence of ORFs (Assumes --orf)  |
 |            | `--detect`        | Detect molucule and exit  |
