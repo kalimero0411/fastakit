@@ -2,8 +2,8 @@
 set -e
 
 # Default parameters
-version=23.12
-fastakit_dir=$(echo $(dirname $(readlink --canonicalize $(which fastakit))))
+version=24.03
+fastakit_dir=$(dirname $(readlink --canonicalize $(which fastakit)))
 time_start=$(date +%s)
 threads=$(command -v nproc --all &> /dev/null && nproc || echo 1)
 lettercase=0
@@ -49,7 +49,7 @@ Usage: fastakit [OPTION]... [Sequence.fasta]\n
     --name_regex [string]\t Truncate FASTA header with regex (used with --max_seq)
     --get_names [string]\t Return the sequences with names that match a string (perl regex)
     --check\t Check if FASTA file is single line
-    --makebed\t Create BED output for ORFs (Defaults to --orf)
+    --makeanno [string]\t Create BED/GFF/GTF output for ORFs (Defaults to --orf and BED format)
     --upstream\t Retrieve # size upstream flanking sequence of ORFs (Assumes --orf)
     --downstream #\t Retrieve # size downstream flanking sequence of ORFs (Assumes --orf)
     --detect\t Detect molucule and exit
@@ -238,9 +238,9 @@ arg=$1
   multi=$2 # Covert to multiline FASTA
   shift 2
   ;;
-  --makebed)
-  makebed=$(mktemp --tmpdir=$tmpdir fastakit.XXXXXXXXXX)
-  shift
+  --makeanno)
+  makeanno=$2
+  shift 2
   ;;
   --upstream)
   upstream=$2
@@ -754,22 +754,15 @@ arg=$1
       
       # Multi-line conversion function
       function multiline(){
-      paste $1 $2 |
-     grep --perl-regexp --invert-match "\t$" |
-     tr "\t" "\n" |
-      if [ $(grep --count --perl-regexp --ignore-case "^>.+[ACTGU]{$multi}" $HEADERS) -eq 0 ]
-      then
-       sed --regexp-extended "s/\r//g; s/([ACTGUactgu]{$multi})/\1\n/g"
-      else
-       awk -F "" -v multi="$multi" '/>/{print $0}; !/>/{for(i=1; i<=NF; i+=multi) {print substr($0,i,multi);}}'
-      fi
+       cut --fields=2 "$1" |
+       sed --regexp-extended "s/([ACTGUactgu]{$multi})/\1\t/g"
       }
       
       # Count non-nucleotide characters function
       fun_nonnuc(){
-      paste <(cat $1 | tr --delete ">") <(cat $2 | tr --delete "ACTGUactgu" | awk '{print length($0)}') |
-      grep --invert-match --perl-regexp "\t0"
-     }
+       paste <(cat $1 | tr --delete ">") <(cat $2 | tr --delete "ACTGUactgu" | awk '{print length($0)}') |
+       grep --invert-match --perl-regexp "\t0"
+      }
      
      # Sequence statistics function
      function seq_stats(){
@@ -890,7 +883,7 @@ arg=$1
         ORFHEADERS=$5
        fi
        
-       if [ ! -z ${makebed+x} ]
+       if [ ! -z ${makeanno+x} ]
        then
         local seq_length_orf=$(mktemp --tmpdir=$tmpdir fastakit.XXXXXXXXXX)
         if [[ $threads != 1 ]]
@@ -1007,7 +1000,7 @@ arg=$1
         ORFFILE1=$4
        fi
        
-       if [ ! -z ${makebed+x} ]
+       if [ ! -z ${makeanno+x} ]
        then
         if [ $extract -eq 1 ]
          then
@@ -1058,7 +1051,7 @@ arg=$1
        fi
       }
       
-      makebed_fun(){
+      makeanno_fun(){
       awk -F $'\t' -v min_seq_length="${seq_range[0]-0}" -v max_seq_length="${seq_range[1]-0}" -v name_regex=${name_regex-""} '{OFS="\t"};
       {headers=$1}; {gsub(/_orf[0-9]+/,"",$1)}; {gsub(/_frame[0-9]+/,"",$1)}; {gsub(/_extract[0-9]+/,"",$1)}; {gsub(name_regex,"",$1)};
       $2 ~ 0{if( $5-$4 >= min_seq_length && ($5-$4 <= max_seq_length || max_seq_length == 0)){
@@ -1085,7 +1078,17 @@ arg=$1
       cut --fields=1-3,5-10 |
       sort --parallel="$threads" --field-separator=$'\t' --key=1,1 --key=2,2n
      fi |
-     cat <(echo -e "# Created with fastakit version "$version"\n") -
+     if [[ $makeanno == "GFF3" ]]
+     then
+      awk -F $'\t' '{OFS="\t"}; {print $1,"fastakit","CDS",$2+1,$3,$5,$6,0,"ID="$4"; Parent="$1}' |
+      cat <(echo -e "##gff-version 3\n## Created with fastakit version "$version) -
+     elif [[ $makeanno == "GTF" ]]
+     then
+      awk -F $'\t' '{OFS="\t"}; {print $1,"fastakit","CDS",$2+1,$3,$5,$6,0,"gene_id \""$1"\"; transcript_id \""$4"\""}' |
+      cat <(echo -e "##gtf-version 2.2\n## Created with fastakit version "$version) -
+     else
+      cat <(echo -e "##bed format\n## Created with fastakit version "$version) -
+     fi
      if [ ! -z ${verbose+x} ]
      then
       echo -ne "\nBED file creation done: " >&2
@@ -1143,11 +1146,20 @@ arg=$1
    unset translate
   fi
   
-  if [ ! -z ${makebed+x} ]
+  if [ ! -z ${makeanno+x} ]
   then
    if [ -z ${orf+x} ] && [ -z ${extract+x} ]
    then
     orf=1
+   fi
+   if [ $(grep --ignore-case --max-count=1 --count --perl-regexp "gff" <(echo $makeanno)) -eq 1 ]
+   then
+    makeanno=GFF3
+   elif [ $(grep --ignore-case --max-count=1 --count --perl-regexp "gtf" <(echo $makeanno)) -eq 1 ]
+   then
+    makeanno=GTF
+   else
+    makeanno=BED
    fi
    unset translate
    translate_table=1
@@ -1325,27 +1337,6 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep -
      HEADERS=$HEADERS_TMP
     fi
     
-    # Convert to Multi-line FASTA
-    if [ ! -z ${multi+x} ]
-    then
-     if [ ! -z ${verbose+x} ]; then echo "Converting to multi line FASTA" >&2; fi
-     SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
-     multiline $HEADERS $INFILE > $OUTFILE
-     if [ ! -z ${inplace+x} ]
-     then
-      cp --force $OUTFILE $FILE
-     else
-      cat $OUTFILE
-     fi
-    
-    if [ ! -z ${verbose+x} ]
-    then
-     echo -ne "\nMulti line conversion done: " >&2
-     show_time
-    fi
-    exit 0
-    fi
-    
     if [ ! -z ${nonnuc+x} ]
     then
      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
@@ -1458,7 +1449,7 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep -
      fi
      
      # Verbose sequence cutoffs
-     if [ ! -z ${verbose+x} ] && [ ! -z $seq_range ]; then echo "Extracting sequences between "${seq_range[1]}" and "${seq_range[0]}" bp/aa" >&2; fi
+     if [ ! -z ${verbose+x} ] && [ ! -z $seq_range ]; then echo "Extracting sequences between "${seq_range[0]}" and "${seq_range[1]}" bp/aa" >&2; fi
      if [ ! -z ${verbose+x} ] && [ ! -z $max_seq ]; then echo "Extracting "$max_seq" longest sequence(s) for each input sequence" >&2; fi
 
      # ORF finding
@@ -1467,7 +1458,7 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep -
      if [ ! -z ${verbose+x} ]; then echo "ORF | frame(s) "${frame[@]} >&2; fi
      if [ ! -z ${translate+x} ] && [ ! -z ${verbose+x} ]; then echo "Translate | frame(s) "${frame[@]} >&2; fi
      if [ $translate_table -ne 1 ] && [ ! -z ${verbose+x} ]; then echo "Translation code: "$translate_table >&2; fi
-     if [ ! -z ${makebed+x} ] && [ ! -z ${verbose+x} ]; then echo "Output in BED format" >&2; fi
+     if [ ! -z ${makeanno+x} ] && [ ! -z ${verbose+x} ]; then echo "Output in "$makeanno" format" >&2; fi
      
      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
      
@@ -1482,7 +1473,7 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep -
       do
        declare OUTCORE$core=$(mktemp --tmpdir=$tmpdir fastakit.XXXXXXXXXX)
        declare HEADCORE$core=$(mktemp --tmpdir=$tmpdir fastakit.XXXXXXXXXX)
-       if [ ! -z ${makebed+x} ]
+       if [ ! -z ${makeanno+x} ]
        then
         orf_search ${start[$core]} ${end[$core]} $core $INFILE $HEADERS <(awk -F $'\t' '{print length($0)}' $INFILE) &
         pids[$core]=$!
@@ -1499,7 +1490,7 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep -
       
       for ((core=0;core <= $(($threads - 1));core++))
       do
-      if [ ! -z ${makebed+z} ]
+      if [ ! -z ${makeanno+z} ]
       then
        outcore_tmp=OUTCORE$core
        cat ${!outcore_tmp} >> $OUTFILE
@@ -1513,10 +1504,10 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep -
 
      HEADERS=$HEADERS_TMP
      
-     if [ ! -z ${makebed+x} ]
+     if [ ! -z ${makeanno+x} ]
      then
      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
-     makebed_fun $INFILE
+     makeanno_fun $INFILE
      fi
 
      if [ ! -z ${verbose+x} ] && [ -z ${translate+x} ]
@@ -1608,10 +1599,10 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep -
        cat ${!outcore_tmp} >> $OUTFILE
       done
       
-     if [ ! -z ${makebed+x} ]
+     if [ ! -z ${makeanno+x} ]
      then
       SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
-      makebed_fun $INFILE
+      makeanno_fun $INFILE
      fi
      fi
      
@@ -1718,6 +1709,31 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep -
       fi
      fi
      
+#####################################################
+    # Ending functions
+     
+     # Convert to Multi-line FASTA
+    if [ ! -z ${multi+x} ]
+    then
+     if [ ! -z ${verbose+x} ]; then echo "Converting to multi line FASTA" >&2; fi
+     SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
+     paste <(cut --fields=1 $INFILE) <(multiline $INFILE) |
+     tr "\t" "\n" > $OUTFILE
+     if [ ! -z ${inplace+x} ]
+     then
+      cp --force $OUTFILE $FILE
+     else
+      cat $OUTFILE
+     fi
+    
+    if [ ! -z ${verbose+x} ]
+    then
+     echo -ne "\nMulti line conversion done: " >&2
+     show_time
+    fi
+    exit 0
+    fi
+     
      # GC content
      if [ ! -z ${percent_GC+x} ]
      then
@@ -1783,7 +1799,7 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep -
      # Separate sequences into files
      if [ ! -z ${separate+x} ]
      then
-     echo "Separating sequences into files" >&2
+     if [ ! -z ${verbose+x} ]; then echo "Separating sequences into files" >&2; fi
       if [ ! -d $separate ]
       then
        mkdir -p $separate
@@ -1812,6 +1828,9 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep -
       fi
      exit 0
     fi
+    
+##################################
+    # OUTPUT
     
      # Convert tabbed to FASTA
      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
