@@ -1451,14 +1451,20 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep -
      # Verbose sequence cutoffs
      if [ ! -z ${verbose+x} ] && [ ! -z $seq_range ]
      then
+      if [[ $MOLECULE == "PROTEIN" ]]
+      then
+       mol_unit="aa"
+      else
+       mol_unit="bp"
+      fi
       if [ ${seq_range[0]} -eq 0 ]
       then
-       echo "Extracting sequences under "${seq_range[1]}" bp/aa" >&2
+       echo "Extracting sequences under "${seq_range[1]}" "$mol_unit >&2
       elif [ ${seq_range[1]} -eq 0 ]
       then
-       echo "Extracting sequences over "${seq_range[0]}" bp/aa" >&2
+       echo "Extracting sequences over "${seq_range[0]}" "$mol_unit >&2
       else
-       echo "Extracting sequences between "${seq_range[0]}" and "${seq_range[1]}" bp/aa" >&2
+       echo "Extracting sequences between "${seq_range[0]}" and "${seq_range[1]}" "$mol_unit >&2
       fi
      fi
      if [ ! -z ${verbose+x} ] && [ ! -z $max_seq ]; then echo "Extracting "$max_seq" longest sequence(s) for each input sequence" >&2; fi
