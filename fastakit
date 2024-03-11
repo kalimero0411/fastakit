@@ -1455,6 +1455,7 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep -
       then
        echo "Extracting sequences under "${seq_range[1]}" bp/aa" >&2
       elif [ ${seq_range[1]} -eq 0 ]
+      then
        echo "Extracting sequences over "${seq_range[0]}" bp/aa" >&2
       else
        echo "Extracting sequences between "${seq_range[0]}" and "${seq_range[1]}" bp/aa" >&2
