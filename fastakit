@@ -2,7 +2,7 @@
 set -e
 
 # Default parameters
-version=24.03
+version=24.05
 fastakit_dir=$(dirname $(readlink --canonicalize $(which fastakit)))
 time_start=$(date +%s)
 threads=$(command -v nproc --all &> /dev/null && nproc || echo 1)
@@ -1247,6 +1247,13 @@ arg=$1
     else
      grep ">" $FILE > $HEADERS
     fi
+    
+    # Tabs in headers exception
+    if [ $(grep --perl-regexp --count --max-count=1 "\t" $HEADERS) -eq 1 ]
+    then
+     echo -e "Tab character in FASTA headers!" >&2
+     exit 1
+    fi
 
     
 if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep --count ">") != $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep --count --invert-match ">") ]] || [[ $(wc --lines $HEADERS | cut --fields=1 --delimiter=" ") != $(grep --count --invert-match ">" $FILE) ]]
@@ -1319,6 +1326,12 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep -
       show_time
      fi
     fi
+    
+    if [ $(grep --max-count=1 --perl-regexp "\t" $HEADERS) -gt 0 ]
+    then
+     tab_string=$(echo " $(tr -dc '[[:alnum:]]' < /dev/urandom | head -c 20) ")
+     sed --in-place "s/\t/$tab_string/g" $HEADERS
+    fi    
     
     detect_mol $OUTFILE
     
@@ -1732,29 +1745,7 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep -
 #####################################################
     # Ending functions
      
-     # Convert to Multi-line FASTA
-    if [ ! -z ${multi+x} ]
-    then
-     if [ ! -z ${verbose+x} ]; then echo "Converting to multi line FASTA" >&2; fi
-     SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
-     paste <(cut --fields=1 $INFILE) <(multiline $INFILE) |
-     tr "\t" "\n" > $OUTFILE
-     if [ ! -z ${inplace+x} ]
-     then
-      cp --force $OUTFILE $FILE
-     else
-      cat $OUTFILE
-     fi
-    
-    if [ ! -z ${verbose+x} ]
-    then
-     echo -ne "\nMulti line conversion done: " >&2
-     show_time
-    fi
-    exit 0
-    fi
-     
-     # GC content
+    # GC content
      if [ ! -z ${percent_GC+x} ]
      then
      if [ ! -z ${verbose+x} ]
@@ -1851,11 +1842,31 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep -
     
 ##################################
     # OUTPUT
+
+     # Convert to Multi-line FASTA
+    if [ ! -z ${multi+x} ]
+    then
+     if [ ! -z ${verbose+x} ]; then echo "Converting to multi line FASTA" >&2; fi
+     SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
+     paste <(cut --fields=1 $INFILE) <(multiline $INFILE) > $OUTFILE
+    
+     if [ ! -z ${verbose+x} ]
+     then
+      echo -ne "\nMulti line conversion done: " >&2
+      show_time
+     fi
+    fi
     
      # Convert tabbed to FASTA
      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
      cat $INFILE |
-     tr "\t" "\n" > $OUTFILE
+     tr "\t" "\n" |
+     if [ ! -z ${tab_string+x} ]
+     then
+      sed "s/$tab_string/\t/g"
+     else
+      cat
+     fi > $OUTFILE
      
     # Output inplace or stdout
     if [ ! -z ${inplace+x} ]
