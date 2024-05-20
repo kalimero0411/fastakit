@@ -1327,7 +1327,7 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $FILE | grep -
      fi
     fi
     
-    if [ $(grep --max-count=1 --perl-regexp "\t" $HEADERS) -gt 0 ]
+    if [ $(grep --count --max-count=1 --perl-regexp "\t" $HEADERS) -gt 0 ]
     then
      tab_string=$(echo " $(tr -dc '[[:alnum:]]' < /dev/urandom | head -c 20) ")
      sed --in-place "s/\t/$tab_string/g" $HEADERS
