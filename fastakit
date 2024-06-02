@@ -14,10 +14,10 @@ max_orf_num=0
 # Cleanup temp files
 tmpdir=$(mktemp --tmpdir=/tmp --directory fastakit.XXXXXXXXXX)
 chmod --recursive 775 $tmpdir
-#cleanup(){
-# rm --force --recursive $tmpdir
-#}
-#trap cleanup EXIT
+cleanup(){
+ rm --force --recursive $tmpdir
+}
+trap cleanup EXIT
 
 usage="
 Usage: fastakit [OPTION]... [Sequence.fasta]\n
