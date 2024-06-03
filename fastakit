@@ -1078,7 +1078,8 @@ arg=$1
      if [ ! -z ${max_seq+x} ]
      then
       sort --parallel="$threads" --field-separator=$'\t' --key=1,1 --key=4,4nr |
-      awk -F $'\t' -v max_seq="$max_seq" 'NR==1{i=1; head=$1}; {if($1 == head) {if(i <= max_seq){print $0; i++; head=$1} else next} else {print $0; i=2; head=$1}}'
+      awk -F $'\t' -v max_seq="$max_seq" 'NR==1{i=1; head=$1}; {if($1 == head) {if(i <= max_seq){print $0; i++; head=$1} else next} else {print $0; i=2; head=$1}}' |
+      sort --parallel="$threads" --field-separator=$'\t' --key=1,1 --key=2,2n
      else
       sort --parallel="$threads" --field-separator=$'\t' --key=1,1 --key=2,2n
      fi |
