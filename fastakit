@@ -620,7 +620,7 @@ arg=$1
      function detect_mol(){
      local input=$(mktemp --tmpdir=$tmpdir fastakit.detect_mol.input.XXXXXXXXXX)
      input=$1
-     if [ $(head --bytes=5000000 $input | grep --ignore-case --max-count=1 --count --perl-regexp "[PLIFQE]") -eq 0 ]
+     if [ $(grep --ignore-case --max-count=1 --count --perl-regexp "[DEFHIKLMNPQRSVWY]" $input) -eq 0 ]
      then
       export MOL=$(mktemp --tmpdir=$tmpdir fastakit.detect_mol.MOL.XXXXXXXXXX)
       export input
@@ -1279,7 +1279,7 @@ arg=$1
     # Detect molecule and exit
     if [ ! -z ${detect+x} ]
     then
-     detect_mol <(grep --perl-regexp --invert-match "^>" $INFILE)
+     detect_mol <(grep --perl-regexp --invert-match "^>" $INFILE | head --bytes=5000000)
      exit 0
     fi
     
@@ -1378,7 +1378,7 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $INFILE | grep
      sed --in-place "s/\t/$tab_string/g" $HEADERS
     fi    
     
-    detect_mol $OUTFILE
+    detect_mol <(head --bytes=5000000 $OUTFILE)
     
     # Exception translate or orf for proteins
     if ([ ! -z ${translate+x} ] || [ ! -z ${orf+x} ]) && [[ $MOLECULE = "PROTEIN" ]]
@@ -1599,7 +1599,7 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $INFILE | grep
       echo -n "ORF detection and translation done: " >&2
       show_time
      fi
-     detect_mol $OUTFILE
+     detect_mol <(head --bytes=5000000 $OUTFILE)
     fi
     
     # Separate to codons and translate
@@ -1622,7 +1622,7 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $INFILE | grep
         echo -n "Translation done: " >&2
         show_time
        fi
-       detect_mol $OUTFILE
+       detect_mol <(head --bytes=5000000 $OUTFILE)
     fi
     
     # Minimum/Maximum length
