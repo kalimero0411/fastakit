@@ -1254,6 +1254,7 @@ arg=$1
     
     HEADERS=$(mktemp --tmpdir=$tmpdir fastakit.fastakit.HEADERS.XXXXXXXXXX)
     OUTFILE=$(mktemp --tmpdir=$tmpdir fastakit.fastakit.OUTFILE.XXXXXXXXXX)
+    DETECT_sample=$(mktemp --tmpdir=$tmpdir fastakit.fastakit.DETECT_sample.XXXXXXXXXX)
     
     # Remove empty lines
     if [ $(grep --count --max-count=1 --perl-regexp "^$" $INFILE) -ge 1 ]
@@ -1279,7 +1280,8 @@ arg=$1
     # Detect molecule and exit
     if [ ! -z ${detect+x} ]
     then
-     detect_mol <(grep --perl-regexp --invert-match "^>" $INFILE | head --bytes=5000000)
+     grep --perl-regexp --invert-match "^>" $INFILE | head --bytes=5000000 > $DETECT_sample
+     detect_mol $DETECT_sample
      exit 0
     fi
     
@@ -1378,7 +1380,9 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $INFILE | grep
      sed --in-place "s/\t/$tab_string/g" $HEADERS
     fi    
     
-    detect_mol <(head --bytes=5000000 $OUTFILE)
+    
+    head --bytes=5000000 $OUTFILE > $DETECT_sample
+    detect_mol $DETECT_sample
     
     # Exception translate or orf for proteins
     if ([ ! -z ${translate+x} ] || [ ! -z ${orf+x} ]) && [[ $MOLECULE = "PROTEIN" ]]
@@ -1599,7 +1603,8 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $INFILE | grep
       echo -n "ORF detection and translation done: " >&2
       show_time
      fi
-     detect_mol <(head --bytes=5000000 $OUTFILE)
+     head --bytes=5000000 $OUTFILE > $DETECT_sample
+     detect_mol $DETECT_sample
     fi
     
     # Separate to codons and translate
@@ -1622,7 +1627,8 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $INFILE | grep
         echo -n "Translation done: " >&2
         show_time
        fi
-       detect_mol <(head --bytes=5000000 $OUTFILE)
+       head --bytes=5000000 $OUTFILE > $DETECT_sample
+       detect_mol $DETECT_sample
     fi
     
     # Minimum/Maximum length
