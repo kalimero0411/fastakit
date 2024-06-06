@@ -620,7 +620,7 @@ arg=$1
      function detect_mol(){
      local input=$(mktemp --tmpdir=$tmpdir fastakit.detect_mol.input.XXXXXXXXXX)
      input=$1
-     if [ $(grep --ignore-case --max-count=1 --count --perl-regexp "[DEFHIKLMPQRSVWY]" $input) -eq 0 ]
+     if [ $(grep --ignore-case --max-count=1 --count --perl-regexp "[EFILPQ]" $input) -eq 0 ] || [ $((100 * $(grep --ignore-case --only-matching --perl-regexp "[DHKMRSVWY]" $input | tr -d "\n" | wc -m) / $(cat $input | tr -d "\n" | wc -m))) -lt 10 ]
      then
       export MOL=$(mktemp --tmpdir=$tmpdir fastakit.detect_mol.MOL.XXXXXXXXXX)
       export input
