@@ -1230,10 +1230,10 @@ arg=$1
     then
      if [ -f "$1" ]
      then
-      cp --force "$1" $INFILE
+      FILE="$1"
+      cp --force $FILE $INFILE
      elif [ -p "/dev/fd/${1#/dev/fd/}" ]
      then
-      stdin=1
       cat "$1" > $INFILE
      else
       echo "Invalid input provided" >&2
@@ -1243,7 +1243,6 @@ arg=$1
      fi
     elif [[ ! -t 0 ]]
     then
-     stdin=1
      cat - > $INFILE
     else
      echo "No input provided" >&2
@@ -1901,7 +1900,6 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $INFILE | grep
      if [ ! -z ${verbose+x} ]; then echo "Converting to multi line FASTA" >&2; fi
      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
      paste <(cut --fields=1 $INFILE) <(multiline $INFILE) > $OUTFILE
-    
      if [ ! -z ${verbose+x} ]
      then
       echo -ne "\nMulti line conversion done: " >&2
@@ -1921,7 +1919,7 @@ if [[ $(grep --before-context=1 --max-count=10 --invert-match ">" $INFILE | grep
      fi > $OUTFILE
      
     # Output inplace or stdout
-    if [ ! -z ${inplace+x} ]
+    if [ ! -z ${inplace+x} ] && [ ! -z ${FILE+x} ]
      then
       cp --force $OUTFILE $FILE
      else
