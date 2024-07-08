@@ -1301,9 +1301,8 @@ arg=$1
      exit 1
     fi
 
-    if awk 'BEGIN{headers=0;seqs=0}; $0 ~ /^>/{headers++}; END{if(headers==NR/2){exit 1}}'
+    if awk 'BEGIN{headers=0}; $0 ~ "^>"{headers++}; END{if(headers==NR/2){exit 1}}' $INFILE
     then
-    
      if [ ! -z ${verbose+x} ]; then echo "FASTA file is NOT single line" >&2; fi
      if [ ! -z ${check_sl+x} ]; then exit 1; fi
 
