@@ -1257,6 +1257,7 @@ arg=$1
     
     # Remove empty lines
     if ! awk '$0 ~ "^$"{exit 1}' $INFILE
+    then
      grep --invert-match --perl-regexp "^$" $INFILE > $OUTFILE
      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
     fi
