@@ -12,7 +12,7 @@ fastakit [OPTIONS]... [Sequence.fasta]
 | `-c`           | `--complement`         | Complementary sequence  |
 | `-m`           | `--reverse_seq`         | Reverse sequence  |
 |           | `--unique`         | Remove duplicate sequences  |
-|           | `--multi #`         | Convert to multi-line FASTA (nucleotide only)  |
+|           | `--multi #`         | Convert to multi-line FASTA  |
 |            | `--random`         | Create random sequences of respective length  |
 | `-n`          | `--name_sort`         | Sort FASTA by name  |
 | `-l`           | `--length_sort`         | Sort FASTA by sequence length (shortest to longest)  |

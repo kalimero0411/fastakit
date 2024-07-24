@@ -26,7 +26,7 @@ Usage: fastakit [OPTION]... [Sequence.fasta]\n
     -c | --complement\t Complementary sequence
     -m | --reverse_seq\t Reverse sequence
     --unique\t Remove duplicate sequences
-    --multi \t Convert to multi-line FASTA (nucleotide only)
+    --multi \t Convert to multi-line FASTA
     --random\t Create random sequences of respective length
     -n | --name_sort\t Sort FASTA by name
     -l | --length_sort\t Sort FASTA by sequence length (shortest to longest)
@@ -748,13 +748,7 @@ arg=$1
        exit 1
       fi
       }
-      
-      # Multi-line conversion function
-      function multiline(){
-       cut --fields=2 "$1" |
-       sed --regexp-extended "s/([ACTGUactgu]{$multi})/\1\t/g"
-      }
-      
+         
       # Count non-nucleotide characters function
       fun_nonnuc(){
        paste <(cat $1 | tr --delete ">") <(cat $2 | tr --delete "ACTGUactgu" | awk '{print length($0)}') |
@@ -1890,7 +1884,9 @@ arg=$1
     then
      if [ ! -z ${verbose+x} ]; then echo "Converting to multi line FASTA" >&2; fi
      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
-     paste <(cut --fields=1 $INFILE) <(multiline $INFILE) > $OUTFILE
+     cut --fields=2 $INFILE |
+     sed -E "s/(.{${multi}})/\1\t/g" |
+     paste <(cut --fields=1 $INFILE) - > $OUTFILE
      if [ ! -z ${verbose+x} ]
      then
       echo -ne "\nMulti line conversion done: " >&2
