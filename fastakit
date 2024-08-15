@@ -2,7 +2,7 @@
 set -e
 
 # Default parameters
-version=24.07
+version=24.08
 fastakit_dir=$(dirname $(readlink --canonicalize $(which fastakit)))
 time_start=$(date +%s)
 threads=$(command -v nproc --all &> /dev/null && nproc || echo 1)
@@ -1439,7 +1439,7 @@ arg=$1
 
     if [ ! -z ${rename+x} ]
     then
-     echo ">"$rename$(seq -s "@>"$rename $(grep --count --perl-regexp "^>" $INFILE)) |
+     echo ">"$rename$(seq -w -s "@>"$rename $(grep --count --perl-regexp "^>" $INFILE)) |
      tr "@" "\n" > $HEADERS
     else
      grep ">" $INFILE > $HEADERS
@@ -1665,12 +1665,12 @@ arg=$1
       fi
       if [ ${seq_range[0]} -eq 0 ]
       then
-       echo "Extracting sequences smaller or equal to "${seq_range[1]}" "$mol_unit >&2
+       echo "Extracting sequences <= "${seq_range[1]}" "$mol_unit >&2
       elif [ ${seq_range[1]} -eq 0 ]
       then
-       echo "Extracting sequences larger or equal to "${seq_range[0]}" "$mol_unit >&2
+       echo "Extracting sequences >= "${seq_range[0]}" "$mol_unit >&2
       else
-       echo "Extracting sequences between or equal to "${seq_range[0]}" and "${seq_range[1]}" "$mol_unit >&2
+       echo "Extracting sequences >= "${seq_range[0]}" and <= "${seq_range[1]}" "$mol_unit >&2
       fi
      fi
      if [ ! -z ${verbose+x} ] && [ ! -z $max_seq ]; then echo "Extracting "$max_seq" longest sequence(s) for each input sequence" >&2; fi
