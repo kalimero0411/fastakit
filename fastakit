@@ -798,10 +798,10 @@ arg=$1
      echo -e "Longest sequence\t"$(head -1 $lengths)"\t"$size_short >> $stats_output
      seq_short $(tail -1 $lengths)
      echo -e "Shortest sequence\t"$(tail -1 $lengths)"\t"$size_short >> $stats_output
-     local seq_median=$(awk -v num_seq=$num_seq -v half_num=$half_num \
-     'NR==int(num_seq/2){if(num_seq/2 == int(num_seq/2)) printf "%.1f", ($0+half_num)/2; else printf "%.0f", $0}' $lengths)
-     seq_short $seq_median
-     echo -e "Median\t"$seq_median"\t"$size_short >> $stats_output
+     local seq_median=($(awk -v num_seq=$num_seq -v half_num=$half_num \
+     'NR==int(num_seq/2){if(num_seq/2 == int(num_seq/2)){printf "%.1f", ($0+half_num)/2; printf " "; printf "%.0f", ($0+half_num)/2} else {printf "%.0f", $0; printf " "; printf "%.0f", $0}}' $lengths))
+     seq_short ${seq_median[1]}
+     echo -e "Median\t"${seq_median[0]}"\t"$size_short >> $stats_output
      local seq_mean=($(awk -v total=$total -v num_seq=$num_seq 'BEGIN{printf "%.2f", total/num_seq; printf " "; printf "%.0f", total/num_seq}'))
      seq_short ${seq_mean[1]}
      echo -e "Mean\t"${seq_mean[0]}"\t"$size_short >> $stats_output
