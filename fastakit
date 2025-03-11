@@ -818,7 +818,12 @@ arg=$1
      seq_short $N90
      echo -e "N90\t"$N90"\t"$size_short >> $stats_output
      echo -e "L90\t"$L90_idx >> $stats_output
-     cat $stats_output | column -t -s $'\t'
+     if [ -t 1 ]
+     then
+      cat $stats_output | column -t -s $'\t'
+     else
+      cat $stats_output
+     fi
      }
      
      # Complementary sequnce function
