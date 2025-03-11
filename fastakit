@@ -2,10 +2,10 @@
 set -e
 
 # Default parameters
-version=24.09
+version=25.03
 script_dir=$(dirname $(readlink --canonicalize "${BASH_SOURCE[0]}"))
 time_start=$(date +%s)
-threads=$(command -v nproc --all &> /dev/null && nproc || echo 1)
+threads=$(command nproc --all || echo 1)
 lettercase=0
 frame=1
 translate_table=1
@@ -216,10 +216,7 @@ arg=$1
   shift 2
   ;;
   --seq_range)
-  OFS=$IFS
-  IFS=","
-  seq_range=($(echo "$2")) # Minimum/Maximum nucleotide sequence size
-  IFS=$OFS
+  seq_range=($(echo "$2" | tr "," " ")) # Minimum/Maximum nucleotide sequence size
   if [ ${seq_range[0]} -eq 0 ] && [ ${seq_range[1]} -eq 0 ]
   then
    unset seq_range
@@ -754,35 +751,73 @@ arg=$1
        paste <(cat $1 | tr --delete ">") <(cat $2 | tr --delete "ACTGUactgu" | awk '{print length($0)}') |
        grep --invert-match --perl-regexp "\t0"
       }
-     
+      
+     # Sequence size short
+     function seq_short(){
+     input=$1
+     if [ $input -ge 1000 ]
+     then
+      local input_short=Kbp
+      local input_div=1000
+      if [ $input -ge 1000000 ]
+      then
+       local input_short=Mbp
+       local input_div=1000000
+       if [ $input -ge 1000000000 ]
+       then
+        local input_short=Gbp
+        local input_div=1000000000
+        if [ $input -ge 1000000000000 ]
+        then
+         local input_short=Tbp
+         local input_div=1000000000000
+        fi
+       fi
+      fi
+       size_short=$(echo -e "("$(($input/$input_div))" "$input_short")")
+     fi
+     }
      # Sequence statistics function
      function seq_stats(){
-     lengths=$(mktemp --tmpdir=$tmpdir fastakit.seq_stats.lengths.XXXXXXXXXX)
+     local stats_output=$(mktemp --tmpdir=$tmpdir fastakit.stats_output.XXXXXXXXXX)
+     local lengths=$(mktemp --tmpdir=$tmpdir fastakit.seq_stats.lengths.XXXXXXXXXX)
      awk '{print length($0)}' $1 | sort -rn > $lengths
-     total=$(awk '{OFS="\t"}; {sum+=$0}; END{printf "%.0f", sum}' $lengths)
-     L50_idx=$(awk '{OFS="\t"}; {sum+=$0}; {printf "%s%s%.0f\n", NR,OFS,sum}' $lengths |
+     local total=$(awk '{OFS="\t"}; {sum+=$0}; END{printf "%.0f", sum}' $lengths)
+     local L50_idx=$(awk '{OFS="\t"}; {sum+=$0}; {printf "%s%s%.0f\n", NR,OFS,sum}' $lengths |
      awk -v total=$total -F $'\t' '{if($2 > (total*0.5))printf "%.0f\n", $1}' |
      head -1)
-     L90_idx=$(awk '{OFS="\t"}; {sum+=$0}; {printf "%s%s%.0f\n", NR,OFS,sum}' $lengths |
+     local L90_idx=$(awk '{OFS="\t"}; {sum+=$0}; {printf "%s%s%.0f\n", NR,OFS,sum}' $lengths |
      awk -v total=$total -F $'\t' '{if($2 > (total*0.9))printf "%.0f\n", $1}' |
      head -1)
-     num_seq=$(cat $lengths | wc -l)
-     half_num=$(awk -v num_seq=$num_seq 'NR==(int(num_seq/2)+1){printf $0}' $lengths)
-     echo -e "Total length\t"$total
-     echo -e "Sequence #\t"$num_seq
-     echo -e "Longest sequence\t"$(head -1 $lengths)
-     echo -e "Shortest sequence\t"$(tail -1 $lengths)
-     echo -e "Median\t"$(awk -v num_seq=$num_seq -v half_num=$half_num \
+     local num_seq=$(cat $lengths | wc -l)
+     local half_num=$(awk -v num_seq=$num_seq 'NR==(int(num_seq/2)+1){printf $0}' $lengths)
+     seq_short $total
+     echo -e "Total length\t"${total}"\t"$size_short >> $stats_output
+     echo -e "Sequence #\t"$num_seq >> $stats_output
+     seq_short $(head -1 $lengths)
+     echo -e "Longest sequence\t"$(head -1 $lengths)"\t"$size_short >> $stats_output
+     seq_short $(tail -1 $lengths)
+     echo -e "Shortest sequence\t"$(tail -1 $lengths)"\t"$size_short >> $stats_output
+     local seq_median=$(awk -v num_seq=$num_seq -v half_num=$half_num \
      'NR==int(num_seq/2){if(num_seq/2 == int(num_seq/2)) printf "%.1f", ($0+half_num)/2; else printf "%.0f", $0}' $lengths)
-     echo -e "Mean\t"$(bc <<< "scale=2; $total/$num_seq")
+     seq_short $seq_median
+     echo -e "Median\t"$seq_median"\t"$size_short >> $stats_output
+     local seq_mean=($(awk -v total=$total -v num_seq=$num_seq 'BEGIN{printf "%.2f", total/num_seq; printf " "; printf "%.0f", total/num_seq}'))
+     seq_short ${seq_mean[1]}
+     echo -e "Mean\t"${seq_mean[0]}"\t"$size_short >> $stats_output
      if [[ $MOLECULE != "PROTEIN" ]]
      then 
-      echo -e "GC%\t"$(bc <<< "scale=2; $(cat $1 | tr --delete --complement "[GgCc]" | wc -m)*100/$(cat $1 | tr --delete --complement "[AaTtGgCcUu]" | wc -m)")
+      echo -e "GC%\t"$(bc <<< "scale=2; $(cat $1 | tr --delete --complement "[GgCc]" | wc -m)*100/$(cat $1 | tr --delete --complement "[AaTtGgCcUu]" | wc -m)") >> $stats_output
      fi
-     echo -e "N50\t"$(awk -v L50_idx=$L50_idx 'NR==L50_idx{printf "%.0f", $0}' $lengths)
-     echo -e "L50\t"$L50_idx
-     echo -e "N90\t"$(awk -v L90_idx=$L90_idx 'NR==L90_idx{printf "%.0f", $0}' $lengths)
-     echo -e "L90\t"$L90_idx
+     local N50=$(awk -v L50_idx=$L50_idx 'NR==L50_idx{printf "%.0f", $0}' $lengths)
+     seq_short $N50
+     echo -e "N50\t"$N50"\t"$size_short >> $stats_output
+     echo -e "L50\t"$L50_idx >> $stats_output
+     local N90=$(awk -v L90_idx=$L90_idx 'NR==L90_idx{printf "%.0f", $0}' $lengths)
+     seq_short $N90
+     echo -e "N90\t"$N90"\t"$size_short >> $stats_output
+     echo -e "L90\t"$L90_idx >> $stats_output
+     cat $stats_output | column -t -s $'\t'
      }
      
      # Complementary sequnce function
