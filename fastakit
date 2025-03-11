@@ -774,7 +774,8 @@ arg=$1
         fi
        fi
       fi
-       size_short=$(echo -e "("$(($input/$input_div))" "$input_short")")
+#       size_short=$(echo -e "("$(($input/$input_div))" "$input_short")")
+       size_short=$(echo -e "("$(awk -v input=$input -v input_div=$input_div 'BEGIN{printf "%.1f", input/input_div}')" "$input_short")")
      fi
      }
      # Sequence statistics function
