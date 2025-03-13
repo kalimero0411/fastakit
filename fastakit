@@ -1493,25 +1493,25 @@ arg=$1
      exit 1
     fi
 
-    if awk 'BEGIN{headers=0}; $0 ~ "^>"{headers++}; END{if(headers==NR/2){exit 1}}' $INFILE
+    if ! awk '{if(/^[^>]/) { if(seq > 1) { exit 1 } seq++} else {seq=0}}' $INFILE
     then
      if [ ! -z ${verbose+x} ]; then echo "FASTA file is NOT single line" >&2; fi
      if [ ! -z ${check_sl+x} ]; then exit 1; fi
-
-
+     
+     seqdir=$(mktemp --tmpdir=$tmpdir --directory seqdir.XXXXXXXXXX)
+     csplit --quiet --elide-empty-files --prefix=${seqdir}/chunk_ $INFILE '/^>/' '{*}'
+     parallel --jobs $threads "tail -n +2 {} | tr -d '\n' | sed -E 's/$/\n/g' > {}.out" ::: ${seqdir}/chunk_*
+     cat ${seqdir}/chunk_*.out |
+     
     if [[ $lettercase = 0 ]]
     then
      if [ ! -z ${verbose+x} ]; then echo "Converting to single line FASTA" >&2; fi
-     perl -pe '$. > 1 and /^>/ ? print "\n" : chomp' $INFILE |
-     grep --invert-match ">" |
      tr --delete " " > $OUTFILE
      
     # Convert to upper-case
     elif [[ $lettercase = 1 ]]
      then
       if [ ! -z ${verbose+x} ]; then echo "Converting to upper-case single line FASTA" >&2; fi
-      perl -pe '$. > 1 and /^>/ ? print "\n" : chomp' $INFILE |
-      grep --invert-match ">" |
       tr "[:lower:]" "[:upper:]" |
       tr --delete " " > $OUTFILE
       
@@ -1519,8 +1519,6 @@ arg=$1
      elif [[ $lettercase = 2 ]]
       then
        if [ ! -z ${verbose+x} ]; then echo "Converting to lower-case single line FASTA" >&2; fi
-       perl -pe '$. > 1 and /^>/ ? print "\n" : chomp' $INFILE |
-       grep --invert-match ">" |
        tr "[:upper:]" "[:lower:]" |
        tr --delete " " > $OUTFILE
       
@@ -1840,7 +1838,7 @@ arg=$1
      # Combine headers and sequences
      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
      paste $HEADERS $INFILE |
-     grep --perl-regexp --invert-match "\t$" > $OUTFILE
+     awk '!/\t$/' > $OUTFILE
      
     if [ ! -z ${extract+x} ]
     then
