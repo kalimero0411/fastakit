@@ -26,7 +26,7 @@ Usage: fastakit [OPTION]... [Sequence.fasta]\n
     -c | --complement\t Complementary sequence
     -m | --reverse_seq\t Reverse sequence
     --unique\t Remove duplicate sequences
-    --multi \t Convert to multi-line FASTA
+    --multi #\t Convert to multi-line FASTA with # line length
     --random\t Create random sequences of respective length
     -n | --name_sort\t Sort FASTA by name
     -l | --length_sort\t Sort FASTA by sequence length (shortest to longest)
@@ -1417,16 +1417,16 @@ arg=$1
 ##################################################################
 
     # Get input files
-    INFILE=$(mktemp --tmpdir=$tmpdir fastakit.fastakit.INFILE.XXXXXXXXXX)
     if [ $# -ge 1 ]
     then
      if [ -f "$1" ]
      then
       FILE="$1"
-      cp --force $FILE $INFILE
+#      cp --force $FILE $INFILE
      elif [ -p "/dev/fd/${1#/dev/fd/}" ]
      then
-      cat "$1" > $INFILE
+      FILE=$(mktemp --tmpdir=$tmpdir fastakit.fastakit.FILE.XXXXXXXXXX)
+      cat "$1" > $FILE
      else
       echo "Invalid input provided" >&2
       printf "$usage" |
@@ -1435,7 +1435,8 @@ arg=$1
      fi
     elif [[ ! -t 0 ]]
     then
-     cat - > $INFILE
+     FILE=$(mktemp --tmpdir=$tmpdir fastakit.fastakit.FILE.XXXXXXXXXX)
+     cat - > $FILE
     else
      echo "No input provided" >&2
      printf "$usage" |
@@ -1444,30 +1445,22 @@ arg=$1
     fi
     
     HEADERS=$(mktemp --tmpdir=$tmpdir fastakit.fastakit.HEADERS.XXXXXXXXXX)
+    INFILE=$(mktemp --tmpdir=$tmpdir fastakit.fastakit.INFILE.XXXXXXXXXX)
     OUTFILE=$(mktemp --tmpdir=$tmpdir fastakit.fastakit.OUTFILE.XXXXXXXXXX)
     DETECT_sample=$(mktemp --tmpdir=$tmpdir fastakit.fastakit.DETECT_sample.XXXXXXXXXX)
-    
-    # Remove empty lines
-    if ! awk '$0 ~ "^$"{exit 1}' $INFILE
-    then
-     grep --invert-match --perl-regexp "^$" $INFILE > $OUTFILE
-     SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
-    fi
-    
+
     # Check if FASTA
-    if [ $(head --bytes=1 $INFILE) != ">" ]
+    if [ $(head --bytes=1 $FILE) != ">" ]
     then
      echo -e "File doesn't start with '>' \nIs this a FASTA file?" >&2
      exit 1
     fi
     
+    # Remove empty lines
+     grep --invert-match "^$" $FILE |
     # Remove return carriages
-    if [ $(head --lines=1 $INFILE | grep --max-count=1 --count --perl-regexp "\r") -eq 1 ]
-    then
-     sed --regexp-extended 's/\r//g' $INFILE > $OUTFILE
-     SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
-    fi
-    
+     tr -d "\r" > $INFILE
+        
     # Detect molecule and exit
     if [ ! -z ${detect+x} ]
     then
@@ -1481,18 +1474,12 @@ arg=$1
     if [ ! -z ${rename+x} ]
     then
      echo ">"$rename$(seq -w -s "@>"$rename $(grep --count --perl-regexp "^>" $INFILE)) |
-     tr "@" "\n" > $HEADERS
+     tr "@" "\n"
     else
-     grep ">" $INFILE > $HEADERS
-    fi
+     grep ">" $INFILE
+    fi |
+    sed 's/\t/_/g' > $HEADERS
     
-    # Tabs in headers exception
-    if ! awk '$0 ~ "\t"{exit 1}' $HEADERS
-    then
-     echo -e "Tab character in FASTA headers!" >&2
-     exit 1
-    fi
-
     if ! awk '{if(/^[^>]/) { if(seq > 1) { exit 1 } seq++} else {seq=0}}' $INFILE
     then
      if [ ! -z ${verbose+x} ]; then echo "FASTA file is NOT single line" >&2; fi
