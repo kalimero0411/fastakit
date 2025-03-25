@@ -617,7 +617,7 @@ arg=$1
      function detect_mol(){
      local input=$(mktemp --tmpdir=$tmpdir fastakit.detect_mol.input.XXXXXXXXXX)
      input=$1
-     if [ $(grep --ignore-case --max-count=1 --count --perl-regexp "[EFILPQ]" $input) -eq 0 ] || [ $((100 * $(grep --ignore-case --only-matching --perl-regexp "[DHKMRSVWY]" $input | tr -d "\n" | wc -m) / $(cat $input | tr -d "\n" | wc -m))) -lt 10 ]
+     if [ $(grep --ignore-case --max-count=1 --count --perl-regexp "[EFILPQ]" $input) -eq 0 ] || [ $((100 * $(grep --ignore-case --only-matching --perl-regexp "[DHKMRSVWY]" $input | tr -d "\n" | wc -m) / $(tr -d "\n" < $input | wc -m))) -lt 10 ]
      then
       export MOL=$(mktemp --tmpdir=$tmpdir fastakit.detect_mol.MOL.XXXXXXXXXX)
       export input
@@ -748,7 +748,7 @@ arg=$1
          
       # Count non-nucleotide characters function
       fun_nonnuc(){
-       paste <(cat $1 | tr --delete ">") <(cat $2 | tr --delete "ACTGUactgu" | awk '{print length($0)}') |
+       paste <(tr --delete ">" < $1) <(tr --delete "ACTGUactgu" < $2 | awk '{print length($0)}') |
        grep --invert-match --perl-regexp "\t0"
       }
       
@@ -790,7 +790,7 @@ arg=$1
      local L90_idx=$(awk '{OFS="\t"}; {sum+=$0}; {printf "%s%s%.0f\n", NR,OFS,sum}' $lengths |
      awk -v total=$total -F $'\t' '{if($2 > (total*0.9))printf "%.0f\n", $1}' |
      head -1)
-     local num_seq=$(cat $lengths | wc -l)
+     local num_seq=$(wc -l < $lengths)
      local half_num=$(awk -v num_seq=$num_seq 'NR==(int(num_seq/2)+1){printf $0}' $lengths)
      seq_short $total
      echo -e "Total length\t"${total}"\t"$size_short >> $stats_output
@@ -808,7 +808,7 @@ arg=$1
      echo -e "Mean\t"${seq_mean[0]}"\t"$size_short >> $stats_output
      if [[ $MOLECULE != "PROTEIN" ]]
      then 
-      echo -e "GC%\t"$(bc <<< "scale=2; $(cat $1 | tr --delete --complement "[GgCc]" | wc -m)*100/$(cat $1 | tr --delete --complement "[AaTtGgCcUu]" | wc -m)") >> $stats_output
+      echo -e "GC%\t"$(bc <<< "scale=2; $(tr --delete --complement "[GgCc]" < $1 | wc -m)*100/$(tr --delete --complement "[AaTtGgCcUu]" < $1 | wc -m)") >> $stats_output
      fi
      local N50=$(awk -v L50_idx=$L50_idx 'NR==L50_idx{printf "%.0f", $0}' $lengths)
      seq_short $N50
@@ -820,7 +820,7 @@ arg=$1
      echo -e "L90\t"$L90_idx >> $stats_output
      if [ -t 1 ]
      then
-      cat $stats_output | column -t -s $'\t'
+      column -t -s $'\t' $stats_output
      else
       cat $stats_output
      fi
@@ -1484,11 +1484,100 @@ arg=$1
     then
      if [ ! -z ${verbose+x} ]; then echo "FASTA file is NOT single line" >&2; fi
      if [ ! -z ${check_sl+x} ]; then exit 1; fi
+
+function chunks(){
+local total_lines=$(wc -l < "$1")
+local chunk_ranges=($(awk -v total_lines="$total_lines" -v threads="$threads" '
+BEGIN {
+    # target lines per chunk
+    ideal = total_lines / threads
+    chunk_count = 0
+}
+
+{
+    # Read header positions into an array
+    headers[NR] = $1
+}
+
+END {
+    # total number of headers found
+    H = NR
+    if (H < 1)
+        exit
+  
+    # first chunk always starts at first header
+    chunk_start = headers[1]
+    # accumulated number of lines for current chunk
+    accum = 0
+
+    for (i = 1; i <= H; i++) {
+        # Calculate sequence length: from header i to just before the next header,
+        # or to the end of the file for the last sequence.
+        if (i < H)
+            seq_len = headers[i+1] - headers[i]
+        else
+            seq_len = total_lines - headers[i] + 1
+
+        accum += seq_len
+
+        # If the accumulated lines meets/exceeds the ideal size and
+        # we have not yet created the maximum number of chunks minus one,
+        # then mark the end of this chunk.
+        if (accum >= ideal && chunk_count < threads - 1) {
+            if (i < H)
+                chunk_end = headers[i+1] - 1
+            else
+                chunk_end = total_lines
+
+            print chunk_start, chunk_end
+            chunk_count++
+
+            # If there are still headers left, start the next chunk at the next header.
+            if (i < H)
+                chunk_start = headers[i+1]
+
+            accum = 0
+        }
+    }
+
+    # Print the final chunk (which may be larger or smaller than ideal)
+    if (chunk_start <= total_lines)
+        print chunk_start, total_lines
+}' $header_lines))
+
+    local chunk_num=1
+    for ((i=0; i<${#chunk_ranges[@]}; i+=2)); do
+     # Read start and end lines from chunk_ranges
+     start_line=${chunk_ranges[$i]}
+     end_line=${chunk_ranges[$i+1]}
+    
+     # Define the output file for the chunk
+     output_file=$chunkdir"/chunk_${chunk_num}.fasta"
+    
+     # Use head and tail to extract the chunk from the input file
+     tail -n +$start_line "$INFILE" | head -n $((end_line - start_line + 1)) > "$output_file"
+    
+     # Print progress
+     printf "\r%d%%" $((100 * (i + 2) / ${#chunk_ranges[@]})) >&2
+    
+     # Increment chunk number for the next file
+     ((chunk_num++))
+    done
+echo "" >&2
+}
+     chunkdir=$(mktemp --tmpdir=$tmpdir --directory chunkdir.XXXXXXXXXX)
+     header_lines=$(mktemp --tmpdir=$tmpdir fastakit.fastakit.header_lines.XXXXXXXXXX)
+     grep -n ">" $INFILE | cut -f1 -d":" > $header_lines
      
-     seqdir=$(mktemp --tmpdir=$tmpdir --directory seqdir.XXXXXXXXXX)
-     csplit --quiet --elide-empty-files --prefix=${seqdir}/chunk_ $INFILE '/^>/' '{*}'
-     parallel --jobs $threads "tail -n +2 {} | tr -d '\n' | sed -E 's/$/\n/g' > {}.out" ::: ${seqdir}/chunk_*
-     cat ${seqdir}/chunk_*.out |
+     if [ $(wc -l < $header_lines) -gt 99 ]
+     then
+      chunks $INFILE
+     else
+      csplit --quiet --elide-empty-files --prefix=${chunkdir}/chunk_ $INFILE '/^>/' '{*}'
+      find ${chunkdir} -type f -name "chunk_*" | parallel --jobs $threads "tail -n +2 {} | tr -d '\n' | sed -E 's/$/\n/g' > {}.fasta"
+     fi
+     
+     cat ${chunkdir}/chunk_*.fasta |
      
     if [[ $lettercase = 0 ]]
     then
@@ -2035,7 +2124,7 @@ arg=$1
       then
        mkdir -p $separate
       fi
-      for ((k=1;k<=$(cat $OUTFILE | wc -l);k++))
+      for ((k=1;k<=$(wc -l < $OUTFILE);k++))
       do
        cut --fields=1 $OUTFILE | sed --quiet ''"$k"','"$k"'p;'"$(($k + 1))"'q' > $separate/$k.fasta
        cut --fields=2 $OUTFILE | sed --quiet ''"$k"','"$k"'p;'"$(($k + 1))"'q' >> $separate/$k.fasta
@@ -2080,8 +2169,7 @@ arg=$1
     
      # Convert tabbed to FASTA
      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
-     cat $INFILE |
-     tr "\t" "\n" |
+     tr "\t" "\n" < $INFILE |
      if [ ! -z ${tab_string+x} ]
      then
       sed "s/$tab_string/\t/g"
