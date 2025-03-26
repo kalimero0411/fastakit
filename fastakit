@@ -1170,6 +1170,90 @@ arg=$1
      fi
      exit 0
      }
+     
+     function single_line(){
+local total_lines=$(wc -l < "$1")
+local chunk_ranges=($(awk -v total_lines="$total_lines" -v threads="$threads" '
+BEGIN {
+    # target lines per chunk
+    ideal = total_lines / threads
+    chunk_count = 0
+}
+
+{
+    # Read header positions into an array
+    headers[NR] = $1
+}
+
+END {
+    # total number of headers found
+    H = NR
+    if (threads > H){
+    	for (i = 1; i < H; i++)
+    		print headers[i],headers[i+1] - 1
+    	print headers[i],total_lines
+
+    }else{
+        
+    # first chunk always starts at first header
+    chunk_start = headers[1]
+    # accumulated number of lines for current chunk
+    accum = 0
+
+    for (i = 1; i <= H; i++) {
+        # Calculate sequence length: from header i to just before the next header,
+        # or to the end of the file for the last sequence.
+        if (i < H)
+            seq_len = headers[i+1] - headers[i]
+        else
+            seq_len = total_lines - headers[i] + 1
+
+        accum += seq_len
+
+        # If the accumulated lines meets/exceeds the ideal size and
+        # we have not yet created the maximum number of chunks minus one,
+        # then mark the end of this chunk.
+        if (accum >= ideal && chunk_count < threads - 1) {
+            if (i < H)
+                chunk_end = headers[i+1] - 1
+            else
+                chunk_end = total_lines
+
+            print chunk_start, chunk_end
+            chunk_count++
+
+            # If there are still headers left, start the next chunk at the next header.
+            if (i < H)
+                chunk_start = headers[i+1]
+
+            accum = 0
+        }
+    }
+    
+    # Print the final chunk (which may be larger or smaller than ideal)
+    if (chunk_start <= total_lines)
+        print chunk_start, total_lines
+    }
+}' $header_lines))
+
+    local chunk_num=($(seq -w 1 $((${#chunk_ranges[@]}/2))))
+    for ((i=0; i<${#chunk_ranges[@]}; i+=2)); do
+     # Read start and end lines from chunk_ranges
+     start_line=${chunk_ranges[$i]}
+     end_line=${chunk_ranges[$i+1]}
+    
+     # Use head and tail to extract the chunk from the input file
+     tail -n +$start_line "$INFILE" |
+     head -n $((end_line - start_line + 1)) > $chunkdir"/chunk_"${chunk_num[(($i/2))]}
+    
+     # Print progress
+     if [ ! -z ${verbose+x} ]; then printf "\rChunking FASTA: %d%%" $((100 * (i + 2) / ${#chunk_ranges[@]})) >&2; fi
+    done
+    if [ ! -z ${verbose+x} ]; then echo -en "\r" >&2; fi
+    find ${chunkdir} -type f -name "chunk_*" |
+    parallel --jobs $threads "if [ \$(grep -c '^>' {} ) -eq 1 ]; then tail -n +2 {} | tr -d '\n' | sed -E 's/\$/\n/g' > {}.fasta; else \
+    perl -pe 'if(/^>/){ \$_ = \$.==1 ? \"\" : \"\n\" } else { chomp } END { print \"\n\" }' {} > {}.fasta; fi"
+}
           
 ###############################################
 # Exceptions
@@ -1485,100 +1569,12 @@ arg=$1
      if [ ! -z ${verbose+x} ]; then echo "FASTA file is NOT single line" >&2; fi
      if [ ! -z ${check_sl+x} ]; then exit 1; fi
 
-function chunks(){
-local total_lines=$(wc -l < "$1")
-local chunk_ranges=($(awk -v total_lines="$total_lines" -v threads="$threads" '
-BEGIN {
-    # target lines per chunk
-    ideal = total_lines / threads
-    chunk_count = 0
-}
-
-{
-    # Read header positions into an array
-    headers[NR] = $1
-}
-
-END {
-    # total number of headers found
-    H = NR
-    if (H < 1)
-        exit
-  
-    # first chunk always starts at first header
-    chunk_start = headers[1]
-    # accumulated number of lines for current chunk
-    accum = 0
-
-    for (i = 1; i <= H; i++) {
-        # Calculate sequence length: from header i to just before the next header,
-        # or to the end of the file for the last sequence.
-        if (i < H)
-            seq_len = headers[i+1] - headers[i]
-        else
-            seq_len = total_lines - headers[i] + 1
-
-        accum += seq_len
-
-        # If the accumulated lines meets/exceeds the ideal size and
-        # we have not yet created the maximum number of chunks minus one,
-        # then mark the end of this chunk.
-        if (accum >= ideal && chunk_count < threads - 1) {
-            if (i < H)
-                chunk_end = headers[i+1] - 1
-            else
-                chunk_end = total_lines
-
-            print chunk_start, chunk_end
-            chunk_count++
-
-            # If there are still headers left, start the next chunk at the next header.
-            if (i < H)
-                chunk_start = headers[i+1]
-
-            accum = 0
-        }
-    }
-
-    # Print the final chunk (which may be larger or smaller than ideal)
-    if (chunk_start <= total_lines)
-        print chunk_start, total_lines
-}' $header_lines))
-
-    local chunk_num=1
-    for ((i=0; i<${#chunk_ranges[@]}; i+=2)); do
-     # Read start and end lines from chunk_ranges
-     start_line=${chunk_ranges[$i]}
-     end_line=${chunk_ranges[$i+1]}
-    
-     # Define the output file for the chunk
-     output_file=$chunkdir"/chunk_${chunk_num}.fasta"
-    
-     # Use head and tail to extract the chunk from the input file
-     tail -n +$start_line "$INFILE" | head -n $((end_line - start_line + 1)) > "$output_file"
-    
-     # Print progress
-     printf "\r%d%%" $((100 * (i + 2) / ${#chunk_ranges[@]})) >&2
-    
-     # Increment chunk number for the next file
-     ((chunk_num++))
-    done
-echo "" >&2
-}
      chunkdir=$(mktemp --tmpdir=$tmpdir --directory chunkdir.XXXXXXXXXX)
      header_lines=$(mktemp --tmpdir=$tmpdir fastakit.fastakit.header_lines.XXXXXXXXXX)
      grep -n ">" $INFILE | cut -f1 -d":" > $header_lines
+     single_line $INFILE
      
-     if [ $(wc -l < $header_lines) -gt 99 ]
-     then
-      chunks $INFILE
-     else
-      csplit --quiet --elide-empty-files --prefix=${chunkdir}/chunk_ $INFILE '/^>/' '{*}'
-      find ${chunkdir} -type f -name "chunk_*" | parallel --jobs $threads "tail -n +2 {} | tr -d '\n' | sed -E 's/$/\n/g' > {}.fasta"
-     fi
-     
-     cat ${chunkdir}/chunk_*.fasta |
-     
+    cat ${chunkdir}/chunk_*.fasta |
     if [[ $lettercase = 0 ]]
     then
      if [ ! -z ${verbose+x} ]; then echo "Converting to single line FASTA" >&2; fi
