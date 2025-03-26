@@ -782,7 +782,7 @@ arg=$1
      function seq_stats(){
      local stats_output=$(mktemp --tmpdir=$tmpdir fastakit.stats_output.XXXXXXXXXX)
      local lengths=$(mktemp --tmpdir=$tmpdir fastakit.seq_stats.lengths.XXXXXXXXXX)
-     awk '{print length($0)}' $1 | sort -rn > $lengths
+     cut --field=2 "$1" | awk '{print length($0)}' | sort -rn > $lengths
      local total=$(awk '{OFS="\t"}; {sum+=$0}; END{printf "%.0f", sum}' $lengths)
      local L50_idx=$(awk '{OFS="\t"}; {sum+=$0}; {printf "%s%s%.0f\n", NR,OFS,sum}' $lengths |
      awk -v total=$total -F $'\t' '{if($2 > (total*0.5))printf "%.0f\n", $1}' |
@@ -2135,8 +2135,9 @@ END {
      
     if [ ! -z ${stats+x} ]
     then
-     cut --field=2 $OUTFILE > $INFILE
-     seq_stats $INFILE
+#     cut --field=2 $OUTFILE > $INFILE
+#     seq_stats $INFILE
+      seq_stats $OUTFILE
      if [ ! -z ${verbose+x} ]
       then
        echo -n "Sequence statistics done: " >&2
