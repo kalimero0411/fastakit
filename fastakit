@@ -19,52 +19,55 @@ cleanup(){
 }
 trap cleanup EXIT
 
-usage="
-Usage: fastakit [OPTION]... [Sequence.fasta]\n
-\n\
-    -i | --in-place\t Modify file in-place
-    -c | --complement\t Complementary sequence
-    -m | --reverse_seq\t Reverse sequence
-    --unique\t Remove duplicate sequences
-    --multi #\t Convert to multi-line FASTA with # line length
-    --random\t Create random sequences of respective length
-    -n | --name_sort\t Sort FASTA by name
-    -l | --length_sort\t Sort FASTA by sequence length (shortest to longest)
-    -r | --reverse_sort\t Sort in reverse order
-    --upper\t Sequences to UPPERCASE
-    --lower\t Sequences to lowercase
-    -o | --orf\t Retrieve ORFs
-    --max_orf_num #\t Maximum number of ORFs to output per sequence
-    -p | --translate\t Protein sequences in current frame
-    --table #\t Translation code (Default = standard code; '--table list' for all available codes)
-    --frame #\t Frame to extract codons (Any of frames 1,2,3,4,5,6; 0 = six frames; Default = 1)
-    --gc\t Calculate percent GC per sequence (Disables --translate)
-    --mw\t Calculate the moleculare weight of DNA/RNA/protein per sequence (ss ds)
-    --mw_sort\t Sort by molecular weight
-    --separate [DIR]\t Separate sequnces into files in directory DIR
-    --nonnuc\t Count non-ACTGU characters per sequence
-    --rna_dna\t Convert RNA to DNA / DNA to RNA (Default = no conversion)
-    --seq_range ,#\t Minimum/Maximum sequence size (e.g. 10,50 ; 0 to ignore)
-    --max_seq #\t Return the # of largest sequences for each input sequence (ORFs, proteins, etc.)
-    --name_regex [string]\t Truncate FASTA header with regex (used with --max_seq)
-    --get_names [string]\t Return the sequences with names that match a string (perl regex)
-    --check\t Check if FASTA file is single line
-    --makeanno [string]\t Create BED/GFF/GTF output for ORFs (Defaults to --orf and BED format; Default sort by start position)
-    --upstream #\t Retrieve # size upstream flanking sequence of ORFs (Assumes --orf)
-    --downstream #\t Retrieve # size downstream flanking sequence of ORFs (Assumes --orf)
-    --detect\t Detect molucule and exit
-    --rename [string]\t Change all sequence names to {string}_ (e.g. '--rename test', will give '>test1' etc.)
-    --extract\t Extract contiguous sequences from each sequence (1 = lowercase; 2 = UPPERCASE)
-    --re [string],,#,#,#\t Detect restriction enzyme recognition sites\n\t (Restriction enzyme name, min_length, max_length, min_number, max_number; 0 to ignore; 'list' to list all enzymes)
-    --stats\t Calculate basic stats
-    --version\t Print version date
-    -t | --threads #\t Number of CPU threads to use (Default = Detected processors or 1)
-    -v | --verbose\t Verbose
-    -h | --help\t Display help
+function print_usage(){
+local usage="
+Usage: fastakit [OPTION]... [Sequence.fasta]
+
+    -i | --in-place	Modify file in-place
+    -c | --complement	Complementary sequence
+    -m | --reverse_seq	Reverse sequence
+    --unique	Remove duplicate sequences
+    --multi #	Convert to multi-line FASTA with # line length
+    --random	Create random sequences of respective length
+    -n | --name_sort	Sort FASTA by name
+    -l | --length_sort	Sort FASTA by sequence length (shortest to longest)
+    -r | --reverse_sort	Sort in reverse order
+    --upper	Sequences to UPPERCASE
+    --lower	Sequences to lowercase
+    -o | --orf	Retrieve ORFs
+    --max_orf_num #	Maximum number of ORFs to output per sequence
+    -p | --translate	Protein sequences in current frame
+    --table #	Translation code (Default = standard code; '--table list' for all available codes)
+    --frame #	Frame to extract codons (Any of frames 1,2,3,4,5,6; 0 = six frames; Default = 1)
+    --gc	Calculate percent GC per sequence (Disables --translate)
+    --mw	Calculate the moleculare weight of DNA/RNA/protein per sequence (ss ds)
+    --mw_sort	Sort by molecular weight
+    --separate [DIR]	Separate sequnces into files in directory DIR
+    --nonnuc	Count non-ACTGU characters per sequence
+    --rna_dna	Convert RNA to DNA / DNA to RNA (Default = no conversion)
+    --seq_range ,#	Minimum/Maximum sequence size (e.g. 10,50 ; 0 to ignore)
+    --max_seq #	Return the # of largest sequences for each input sequence (ORFs, proteins, etc.)
+    --name_regex [string]	Truncate FASTA header with regex (used with --max_seq)
+    --get_names [string]	Return the sequences with names that match a string (perl regex)
+    --check	Check if FASTA file is single line
+    --makeanno [string]	Create BED/GFF/GTF output for ORFs (Defaults to --orf and BED format; Default sort by start position)
+    --upstream #	Retrieve # size upstream flanking sequence of ORFs (Assumes --orf)
+    --downstream #	Retrieve # size downstream flanking sequence of ORFs (Assumes --orf)
+    --detect	Detect molucule and exit
+    --rename [string]	Change all sequence names to {string}_ (e.g. '--rename test', will give '>test1' etc.)
+    --extract	Extract contiguous sequences from each sequence (1 = lowercase; 2 = UPPERCASE)
+    --re [string],,#,#,#	Detect restriction enzyme recognition sites\n\t (Restriction enzyme name, min_length, max_length, min_number, max_number; 0 to ignore; 'list' to list all enzymes)
+    --stats	Calculate basic stats
+    --version	Print version date
+    -t | --threads #	Number of CPU threads to use (Default = Detected processors or 1)
+    -v | --verbose	Verbose
+    -h | --help	Display help
 
 Example: fastakit --orf --frame 0 --seq_range 100,1000 --length-sort sequences.fasta > orfs.fasta
 
-" 
+"
+printf "$usage" | awk -F $'\t' '{ printf "%-30s %s\n", $1, $2 }'
+}
 
 # Check arguments
 while [ "$#" -gt 0 ]
@@ -265,8 +268,7 @@ arg=$1
   shift
   ;;
   -h | --help)
-  printf "$usage" |
-  awk -F $'\t' '{ printf "%-30s %s\n", $1, $2 }'
+  print_usage
   exit 0
   ;;
   *)
@@ -275,8 +277,7 @@ arg=$1
    break
   else
   echo "Unknown option: "$1
-  printf "$usage" |
-  awk -F $'\t' '{ printf "%-30s %s\n", $1, $2 }'
+  print_usage
   exit 1
   fi
   ;;
@@ -778,12 +779,13 @@ arg=$1
        size_short=$(echo -e "("$(awk -v input=$input -v input_div=$input_div 'BEGIN{printf "%.1f", input/input_div}')" "$input_short")")
      fi
      }
+     
      # Sequence statistics function
      function seq_stats(){
      local stats_output=$(mktemp --tmpdir=$tmpdir fastakit.stats_output.XXXXXXXXXX)
      local lengths=$(mktemp --tmpdir=$tmpdir fastakit.seq_stats.lengths.XXXXXXXXXX)
-     cut --field=2 "$1" | awk '{print length($0)}' | sort -rn > $lengths
-     local total=$(awk '{OFS="\t"}; {sum+=$0}; END{printf "%.0f", sum}' $lengths)
+     awk -F $'\t' '{print length($2)}' $1 | sort -rn > $lengths
+     local total=$(awk '{sum+=$1}; END{print sum}' $lengths)
      local L50_idx=$(awk '{OFS="\t"}; {sum+=$0}; {printf "%s%s%.0f\n", NR,OFS,sum}' $lengths |
      awk -v total=$total -F $'\t' '{if($2 > (total*0.5))printf "%.0f\n", $1}' |
      head -1)
@@ -807,7 +809,7 @@ arg=$1
      seq_short ${seq_mean[1]}
      echo -e "Mean\t"${seq_mean[0]}"\t"$size_short >> $stats_output
      if [[ $MOLECULE != "PROTEIN" ]]
-     then 
+     then
       echo -e "GC%\t"$(bc <<< "scale=2; $(tr --delete --complement "[GgCc]" < $1 | wc -m)*100/$(tr --delete --complement "[AaTtGgCcUu]" < $1 | wc -m)") >> $stats_output
      fi
      local N50=$(awk -v L50_idx=$L50_idx 'NR==L50_idx{printf "%.0f", $0}' $lengths)
@@ -2135,8 +2137,6 @@ END {
      
     if [ ! -z ${stats+x} ]
     then
-#     cut --field=2 $OUTFILE > $INFILE
-#     seq_stats $INFILE
       seq_stats $OUTFILE
      if [ ! -z ${verbose+x} ]
       then
