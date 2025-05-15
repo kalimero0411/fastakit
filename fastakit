@@ -1623,7 +1623,7 @@ END {
      tr "[:upper:]" "[:lower:]" |
      tr --delete " " > $OUTFILE
     fi
-    if [ ! -z ${verbose+x} ]; then; echo -n "Loading sequence done: " >&2; show_time; fi
+    if [ ! -z ${verbose+x} ]; then echo -n "Loading sequence done: " >&2; show_time; fi
     fi
     
     head --bytes=5000000 $OUTFILE > $DETECT_sample
@@ -1651,7 +1651,7 @@ END {
     then
      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
      fun_nonnuc $HEADERS $INFILE
-     if [ ! -z ${verbose+x} ]; then; echo -n "Non-ACTGU done: " >&2; show_time; fi
+     if [ ! -z ${verbose+x} ]; then echo -n "Non-ACTGU done: " >&2; show_time; fi
      exit 0
     fi
         
@@ -1664,7 +1664,7 @@ END {
       fi
       SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
       fun_comp $INFILE > $OUTFILE
-      if [ ! -z ${verbose+x} ]; then; echo -n "Complement conversion done: " >&2; show_time; fi
+      if [ ! -z ${verbose+x} ]; then echo -n "Complement conversion done: " >&2; show_time; fi
      fi
      
      # DNA-to-RNA or RNA-to-DNA
@@ -1684,7 +1684,7 @@ END {
        exit 1
       fi
       fun_rna_dna $INFILE > $OUTFILE
-      if [ ! -z ${verbose+x} ]; then; echo -n "DNA/RNA conversion done: " >&2; show_time; fi
+      if [ ! -z ${verbose+x} ]; then echo -n "DNA/RNA conversion done: " >&2; show_time; fi
      fi
 
      # Get reverse sequences
@@ -1693,7 +1693,7 @@ END {
       if [ ! -z ${verbose+x} ]; then echo "Converting to reverse sequence" >&2; fi
       SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
       fun_rev $INFILE > $OUTFILE
-      if [ ! -z ${verbose+x} ]; then; echo -n "Reverse conversion done: " >&2; show_time; fi
+      if [ ! -z ${verbose+x} ]; then echo -n "Reverse conversion done: " >&2; show_time; fi
      fi
      
      # Change frame
@@ -1822,8 +1822,8 @@ END {
      makeanno_fun $INFILE
      fi
 
-     if [ ! -z ${verbose+x} ] && [ -z ${translate+x} ]; then; echo -n "ORF detection done: " >&2; show_time; fi
-     if [ ! -z ${verbose+x} ] && [ ! -z ${translate+x} ]; then; echo -n "ORF detection and translation done: " >&2; show_time; fi
+     if [ ! -z ${verbose+x} ] && [ -z ${translate+x} ]; then echo -n "ORF detection done: " >&2; show_time; fi
+     if [ ! -z ${verbose+x} ] && [ ! -z ${translate+x} ]; then echo -n "ORF detection and translation done: " >&2; show_time; fi
      head --bytes=5000000 $OUTFILE > $DETECT_sample
      detect_mol $DETECT_sample
     fi
@@ -1844,7 +1844,7 @@ END {
      sed --regexp-extended 's/ [^ ]{,2} $//g' |
       translate - |
        tr --delete " [:lower:]" > $OUTFILE
-       if [ ! -z ${verbose+x} ]; then; echo -n "Translation done: " >&2; show_time; fi
+       if [ ! -z ${verbose+x} ]; then echo -n "Translation done: " >&2; show_time; fi
        head --bytes=5000000 $OUTFILE > $DETECT_sample
        detect_mol $DETECT_sample
     fi
@@ -1863,7 +1863,7 @@ END {
      then
       SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
       random $INFILE > $OUTFILE
-      if [ ! -z ${verbose+x} ]; then; echo -n "Random sequence done: " >&2; show_time; fi
+      if [ ! -z ${verbose+x} ]; then echo -n "Random sequence done: " >&2; show_time; fi
      fi
 
 #####################################################################
@@ -1922,7 +1922,7 @@ END {
      then
       SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
       sort --ignore-case --parallel="$threads" --field-separator=$'\t' --unique --key=2,2 $INFILE > $OUTFILE
-      if [ ! -z ${verbose+x} ]; then; echo -n "Remove duplicates done: " >&2; show_time; fi
+      if [ ! -z ${verbose+x} ]; then echo -n "Remove duplicates done: " >&2; show_time; fi
      fi
      
      # Sort by name
@@ -1943,7 +1943,7 @@ END {
       else
        sort --parallel="$threads" --field-separator=$'\t' --key=1 $INFILE > $OUTFILE
       fi
-      if [ ! -z ${verbose+x} ]; then; echo -n "Name sort done: " >&2; show_time; fi
+      if [ ! -z ${verbose+x} ]; then echo -n "Name sort done: " >&2; show_time; fi
      fi
     
     # Sort by sequence length
@@ -1966,7 +1966,7 @@ END {
        sort --parallel="$threads" --field-separator=$'\t' --numeric-sort
       fi |
       cut --fields=2,3 > $OUTFILE
-      if [ ! -z ${verbose+x} ]; then; echo -n "Length sort done: " >&2; show_time; fi
+      if [ ! -z ${verbose+x} ]; then echo -n "Length sort done: " >&2; show_time; fi
      fi
      
      # Sort by molecular weight
@@ -1989,7 +1989,7 @@ END {
        sort --parallel="$threads" --field-separator=$'\t' --numeric-sort
       fi |
       cut --fields=2,3 > $OUTFILE
-      if [ ! -z ${verbose+x} ]; then; echo -n "Molecular weight sort done: " >&2; show_time; fi
+      if [ ! -z ${verbose+x} ]; then echo -n "Molecular weight sort done: " >&2; show_time; fi
      fi
      
 #####################################################
@@ -2004,7 +2004,7 @@ END {
      fi
      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
       paste <(cut --fields=1 $INFILE | tr --delete ">") <(cut --fields=2 $INFILE | awk '{var=length($0);gsub("[AaTt]","",$0);print length($0)/var*100}')
-      if [ ! -z ${verbose+x} ]; then; echo -n "GC fraction done: " >&2; show_time; fi
+      if [ ! -z ${verbose+x} ]; then echo -n "GC fraction done: " >&2; show_time; fi
       exit 0
      fi
      
@@ -2023,7 +2023,7 @@ END {
       echo "Error detecting molecule" >&2
       exit 1
      fi
-     if [ ! -z ${verbose+x} ]; then; echo -n "Molecular weight done: " >&2; show_time; fi
+     if [ ! -z ${verbose+x} ]; then echo -n "Molecular weight done: " >&2; show_time; fi
       exit 0
     fi
     
@@ -2041,7 +2041,7 @@ END {
       <(res_enz $INFILE ${min_max_re[0]=0} ${min_max_re[1]=0} ${min_max_re[2]=0} ${min_max_re[3]=0} ${min_max_re[4]=0}) |
       grep --perl-regexp --invert-match "\t$"
       fi
-      if [ ! -z ${verbose+x} ]; then; echo -n "Restriction site detection done: " >&2; show_time; fi
+      if [ ! -z ${verbose+x} ]; then echo -n "Restriction site detection done: " >&2; show_time; fi
       exit 0
      fi
      
@@ -2058,14 +2058,14 @@ END {
        cut --fields=1 $OUTFILE | sed --quiet ''"$k"','"$k"'p;'"$(($k + 1))"'q' > $separate/$k.fasta
        cut --fields=2 $OUTFILE | sed --quiet ''"$k"','"$k"'p;'"$(($k + 1))"'q' >> $separate/$k.fasta
       done
-      if [ ! -z ${verbose+x} ]; then; echo -en "\nSequence separation done: " >&2; show_time; fi
+      if [ ! -z ${verbose+x} ]; then echo -en "\nSequence separation done: " >&2; show_time; fi
       exit 0
      fi
      
     if [ ! -z ${stats+x} ]
     then
       seq_stats $OUTFILE
-     if [ ! -z ${verbose+x} ]; then; echo -n "Sequence statistics done: " >&2; show_time; fi
+     if [ ! -z ${verbose+x} ]; then echo -n "Sequence statistics done: " >&2; show_time; fi
      exit 0
     fi
     
@@ -2080,7 +2080,7 @@ END {
      cut --fields=2 $INFILE |
      sed -E "s/(.{${multi}})/\1\t/g" |
      paste <(cut --fields=1 $INFILE) - > $OUTFILE
-     if [ ! -z ${verbose+x} ]; then; echo -ne "\nMulti line conversion done: " >&2; show_time; fi
+     if [ ! -z ${verbose+x} ]; then echo -ne "\nMulti line conversion done: " >&2; show_time; fi
     fi
     
      # Convert tabbed to FASTA
