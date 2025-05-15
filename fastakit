@@ -1168,7 +1168,7 @@ arg=$1
      else
       cat <(echo -e "## BED format\n## Created with fastakit version "$version) -
      fi
-     if [ ! -z ${verbose+x} ]; then; echo -ne "\nAnnotation file creation done: " >&2; show_time; fi
+     if [ ! -z ${verbose+x} ]; then echo -ne "\nAnnotation file creation done: " >&2; show_time; fi
      exit 0
      }
      
