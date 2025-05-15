@@ -686,8 +686,8 @@ arg=$1
        if [[ $enz_name =~ $is_enz ]]
        then
         repat_tmp=($(grep --ignore-case --perl-regexp ';*'"$enz_name"'[\t;]' $retmp | tr "\t" " "))
-        reheads=${repat_tmp[0]}
-        repat=${repat_tmp[1]}	
+        reheads=("${repat_tmp[0]}")
+        repat=("${repat_tmp[1]}")
         local repat_min=0
         local repat_max=0
        else
@@ -698,14 +698,17 @@ arg=$1
       # Loop over all restriction enzymes
        for ((re=0; re <= $((${#repat[@]} - 1)); re++))
        do
-        repat_len=$(echo $(($(sed --regexp-extended 's/[[][actgu]+[]]/[/gi' <(echo "${repat[$re]}") | wc -m) - 1)))
+#        repat_len=$(echo $(($(sed --regexp-extended 's/[[][actgu]+[]]/[/gi' <(echo "${repat[$re]}") | wc -m) - 1)))
+         cleaned_repat=$(echo "${repat[$re]}" | sed --regexp-extended 's/\[[actgu]+\]/[/gi')
+         repat_len=${#cleaned_repat}
+         
         if [ "$repat_len" -lt "$repat_min" ] ||  ([ "$repat_max" -ne 0 ] && [ "$repat_len" -gt "$repat_max" ])
         then
          continue
         fi
         repat_tmp=${repat[$re]}
         reheads_tmp=${reheads[$re]}
-        paste $reout <(awk -v repat="$repat_tmp" -v reheads="$reheads_tmp" -v resites_min="$resites_min" -v resites_max="$resites_max" \
+        paste "$reout" <(awk -v repat="$repat_tmp" -v reheads="$reheads_tmp" -v resites_min="$resites_min" -v resites_max="$resites_max" \
         '{IGNORECASE = 1; seq=$0; renum=gsub(repat,"",seq);
         if($0 ~ repat && renum >= resites_min && (resites_max == 0 || renum <= resites_max))
         print reheads; else print ""}' $input |
@@ -739,7 +742,7 @@ arg=$1
       then
        cut --fields=2 |
        tr -d "*" |
-       awk -F $'\t' '{print system("tr --delete --complement ARNCEQGHILKMFPSTWYV < /dev/urandom | head --bytes="length($0))}' |
+       awk -F $'\t' '{print system("tr --delete --complement ACDEFGHIKLMNPQRSTVWY < /dev/urandom | head --bytes="length($0))}' |
        tr --delete 0
       else
        echo "Invalid molucule type!" >&2
