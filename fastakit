@@ -1597,7 +1597,7 @@ END {
       
      fi
      
-     if [ ! -z ${verbose+x} ]; then; echo -n "Single line conversion done: " >&2; show_time; fi
+     if [ ! -z ${verbose+x} ]; then echo -n "Single line conversion done: " >&2; show_time; fi
      
     # Skip single line conversion
     else
