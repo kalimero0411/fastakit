@@ -2,7 +2,7 @@
 set -e
 
 # Default parameters
-version=25.08
+version=25.09
 script_dir=$(dirname $(readlink --canonicalize "${BASH_SOURCE[0]}"))
 time_start=$(date +%s)
 threads=$(command nproc --all || echo 1)
@@ -21,7 +21,7 @@ trap cleanup EXIT
 
 function print_usage(){
 local usage="
-Usage: fastakit [OPTION]... [Sequence.fasta]
+Usage: fastakit [OPTIONS]... [Sequence.fasta]
 
     -i | --in-place	Modify file in-place
     -c | --complement	Complementary sequence
@@ -148,6 +148,11 @@ arg=$1
   ;;
   --extract)
   extract=$2 # Extract contiguous sequences from each sequence
+  if !([[ ${extract-x} == "1" ]] || [[ ${extract-x} == "2" ]])
+  then
+   echo "--extract must be 1 or 2 for lowercase or UPPERCASE" >&2
+   exit 1
+  fi
   shift 2
   ;;
   --table)
@@ -338,9 +343,8 @@ arg=$1
 
   # Translation function
   function translate(){
-	input=$1 &&
-	cat $input |
-	
+	local codons="$1" &&
+	sed --regexp-extended 's/ [^ ]{1,2} $//g' $codons |
 	 # Standard code
 	 if [[ $translate_table = 1 ]]
 	 then
@@ -617,15 +621,15 @@ arg=$1
      }
      
      function detect_mol(){
-     local input=$(mktemp --tmpdir=$tmpdir fastakit.detect_mol.input.XXXXXXXXXX)
-     input=$1
-     if [ $(grep --ignore-case --max-count=1 --count --perl-regexp "[EFILPQ]" $input) -eq 0 ] || [ $((100 * $(grep --ignore-case --only-matching --perl-regexp "[DHKMRSVWY]" $input | tr -d "\n" | wc -m) / $(tr -d "\n" < $input | wc -m))) -lt 10 ]
+     local mol_input=$(mktemp --tmpdir=$tmpdir fastakit.detect_mol.input.XXXXXXXXXX)
+     mol_input=$1
+     if [ $(grep --ignore-case --max-count=1 --count --perl-regexp "[DEFHIKLMNOPQRSVWY*]" $mol_input) -eq 0 ]
      then
       export MOL=$(mktemp --tmpdir=$tmpdir fastakit.detect_mol.MOL.XXXXXXXXXX)
-      export input
+      export mol_input
       parallel -j2 --halt now,success=1 ::: \
-      'grep --ignore-case --max-count=1 "T" $input > /dev/null && echo "DNA" > $MOL' \
-      'grep --ignore-case --max-count=1 "U" $input > /dev/null && echo "RNA" > $MOL' &> /dev/null
+      'grep --ignore-case --max-count=1 "T" $mol_input > /dev/null && echo "DNA" > $MOL' \
+      'grep --ignore-case --max-count=1 "U" $mol_input > /dev/null && echo "RNA" > $MOL' &> /dev/null
       MOLECULE=$(cat $MOL)
      else
       MOLECULE="PROTEIN"
@@ -1026,7 +1030,7 @@ arg=$1
         if [ ! -z ${translate+x} ]
         then
          translate - |
-         tr --delete " [:lower:]"
+         tr --delete " "
         else
          tr --delete " "
         fi > ${!outcore_orf}
@@ -1566,7 +1570,7 @@ END {
     fi |
     sed 's/\t/_/g' > $HEADERS
     
-    if ! awk '{if(/^[^>]/) { if(seq > 1) { exit 1 } seq++} else {seq=0}}' $INFILE
+    if ! awk '{if($0 ~ /^>/) { seq=0 } else { seq++; if(seq > 1) { exit 1 }}}' $INFILE
     then
      if [ ! -z ${verbose+x} ]; then echo "FASTA file is NOT single line" >&2; fi
      if [ ! -z ${check_sl+x} ]; then exit 1; fi
@@ -1841,10 +1845,10 @@ END {
      then
       echo "Translation code: "$translate_table >&2
      fi
+     
      awk -F '' '{for (i = 1; i <= length($0); i += 3) { printf "%s%s%s ", substr($0, i, 1), substr($0, i+1, 1), substr($0, i+2, 1);}; print ""}' $INFILE |
-     sed --regexp-extended 's/ [^ ]{,2} $//g' |
       translate - |
-       tr --delete " [:lower:]" > $OUTFILE
+       tr --delete " " > $OUTFILE
        if [ ! -z ${verbose+x} ]; then echo -n "Translation done: " >&2; show_time; fi
        head --bytes=5000000 $OUTFILE > $DETECT_sample
        detect_mol $DETECT_sample
