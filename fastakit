@@ -2,7 +2,7 @@
 set -e
 
 # Default parameters
-version=25.09
+version=25.11
 script_dir=$(dirname $(readlink --canonicalize "${BASH_SOURCE[0]}"))
 time_start=$(date +%s)
 threads=$(command nproc --all || echo 1)
@@ -42,7 +42,7 @@ Usage: fastakit [OPTIONS]... [Sequence.fasta]
     --gc	Calculate percent GC per sequence (Disables --translate)
     --mw	Calculate the moleculare weight of DNA/RNA/protein per sequence (ss ds)
     --mw_sort	Sort by molecular weight
-    --separate [DIR]	Separate sequnces into files in directory DIR
+    --separate #,# [DIR]	Separate sequences into number,size per file in directory DIR (0 to ignore; Default number of sequences)
     --nonnuc	Count non-ACTGU characters per sequence
     --rna_dna	Convert RNA to DNA / DNA to RNA (Default = no conversion)
     --seq_range ,#	Minimum/Maximum sequence size (e.g. 10,50 ; 0 to ignore)
@@ -143,8 +143,9 @@ arg=$1
   shift
   ;;
   --separate)
-  separate=$2 # Separate sequnces into files
-  shift 2
+  separate_chunks=($(echo "$2" | tr "," " "))
+  separate_dir=$(readlink --canonicalize "$3")
+  shift 3
   ;;
   --extract)
   extract=$2 # Extract contiguous sequences from each sequence
@@ -879,23 +880,24 @@ arg=$1
       }
       
       # Thread calculation
-     thread_calc(){
-     local input=$1
-     required_mem=$(echo $((2 * $(du -k $INFILE | cut --fields=1) / $threads)))
-     available_mem=$(awk '/MemAvailable/ {print $2}' /proc/meminfo)
-     seq_num=$(grep --perl-regexp --count "^>" $1)
-     if [[ $seq_num -lt $threads ]]
+     function chunk_calc(){
+     local seq_num=$1
+     local chunks=$2
+#     required_mem=$(echo $((2 * $(du -k $INFILE | cut --fields=1) / $threads)))
+#     available_mem=$(awk '/MemAvailable/ {print $2}' /proc/meminfo)
+
+     if [[ $seq_num -lt $chunks ]]
      then
-      threads=$seq_num
+      chunks=$seq_num
      fi
      
      # Setup start and end lines for dividing sequences
-     BATCH=$(( seq_num / $threads ))
-     remainder=$(( seq_num % $threads ))
+     BATCH=$(( seq_num / $chunks ))
+     remainder=$(( seq_num % $chunks ))
      
      start=1
      end=()
-     for ((core=0;core <= $(($threads - 1));core++))
+     for ((core=0;core <= $(($chunks - 1));core++))
      do
       if [[ ${#end[@]} != 0 ]]
       then
@@ -911,8 +913,9 @@ arg=$1
      
      export start end
      }
-      # ORF search
-      function orf_search(){
+     
+     # ORF search
+     function orf_search(){
        local SWITCH
        local ORFstart=$1
        local ORFend=$2
@@ -1037,7 +1040,7 @@ arg=$1
        fi
       }
       
-      extract_fun(){
+      function extract_fun(){
        local SWITCH
        local ORFstart=$1
        local ORFend=$2
@@ -1103,7 +1106,7 @@ arg=$1
        fi
       }
       
-      makeanno_fun(){
+      function makeanno_fun(){
       awk -F $'\t' -v min_seq_length="${seq_range[0]-0}" -v max_seq_length="${seq_range[1]-0}" -v name_regex=${name_regex-""} '{OFS="\t"};
       {headers=$1}; {gsub(/_orf[0-9]+/,"",$1)}; {gsub(/_frame[0-9]+/,"",$1)}; {gsub(/_extract[0-9]+/,"",$1)}; {gsub(name_regex,"",$1)};
       $2 ~ 0{if( $5-$4 >= min_seq_length && ($5-$4 <= max_seq_length || max_seq_length == 0)){
@@ -1179,68 +1182,50 @@ arg=$1
      
      function single_line(){
 local total_lines=$(wc -l < "$1")
-local chunk_ranges=($(awk -v total_lines="$total_lines" -v threads="$threads" '
-BEGIN {
-    # target lines per chunk
-    ideal = total_lines / threads
-    chunk_count = 0
-}
-
-{
-    # Read header positions into an array
-    headers[NR] = $1
-}
-
-END {
-    # total number of headers found
-    H = NR
-    if (threads > H){
-    	for (i = 1; i < H; i++)
-    		print headers[i],headers[i+1] - 1
-    	print headers[i],total_lines
-
-    }else{
-        
-    # first chunk always starts at first header
-    chunk_start = headers[1]
-    # accumulated number of lines for current chunk
-    accum = 0
-
-    for (i = 1; i <= H; i++) {
-        # Calculate sequence length: from header i to just before the next header,
-        # or to the end of the file for the last sequence.
-        if (i < H)
-            seq_len = headers[i+1] - headers[i]
-        else
-            seq_len = total_lines - headers[i] + 1
-
-        accum += seq_len
-
-        # If the accumulated lines meets/exceeds the ideal size and
-        # we have not yet created the maximum number of chunks minus one,
-        # then mark the end of this chunk.
-        if (accum >= ideal && chunk_count < threads - 1) {
-            if (i < H)
-                chunk_end = headers[i+1] - 1
-            else
-                chunk_end = total_lines
-
-            print chunk_start, chunk_end
-            chunk_count++
-
-            # If there are still headers left, start the next chunk at the next header.
-            if (i < H)
-                chunk_start = headers[i+1]
-
-            accum = 0
-        }
+local chunk_ranges=($(awk -v T="$threads" -v TL="$total_lines" '
+  { n++; start[n]=$1 }
+  END{
+    # record ends and lengths
+    total=0
+    for(i=1;i<=n;i++){
+      end[i]=(i<n? start[i+1]-1 : TL)
+      len[i]=end[i]-start[i]+1
+      total+=len[i]
     }
-    
-    # Print the final chunk (which may be larger or smaller than ideal)
-    if (chunk_start <= total_lines)
-        print chunk_start, total_lines
+    if(T>n) T=n                         # at most one record per chunk
+    if(T<1) T=1
+
+    rem_total=total
+    rem_chunks=T
+    chunks=0
+    sline=start[1]
+    acc=0
+
+    for(i=1;i<=n;i++){
+      acc+=len[i]
+      threshold = rem_total / rem_chunks
+      rem_rec = n - i
+      rem_needed = (T - chunks - 1)
+
+      # cut if we reached current threshold and can still place at least
+      # one record in each remaining chunk
+      if(chunks < T-1 && acc >= threshold && rem_rec >= rem_needed){
+        printf("%d %d", sline, end[i])
+        printf(chunks < T-2 ? " " : "")
+        chunks++
+        rem_total -= acc
+        rem_chunks--
+        sline=start[i+1]
+        acc=0
+      }
     }
-}' $header_lines))
+    # last chunk
+    if(chunks < T){
+      if(chunks>0) printf(" ")
+      printf("%d %d", sline, end[n])
+    }
+    printf("\n")
+  }' "$header_lines"))
 
     local chunk_num=($(seq -w 1 $((${#chunk_ranges[@]}/2))))
     for ((i=0; i<${#chunk_ranges[@]}; i+=2)); do
@@ -1249,8 +1234,7 @@ END {
      end_line=${chunk_ranges[$i+1]}
     
      # Use head and tail to extract the chunk from the input file
-     tail -n +$start_line "$INFILE" |
-     head -n $((end_line - start_line + 1)) > $chunkdir"/chunk_"${chunk_num[(($i/2))]}
+     awk -v start="$start_line" -v end="$end_line" 'NR>=start && NR<=end' "$1" > $chunkdir"/chunk_"${chunk_num[(($i/2))]}
     
      # Print progress
      if [ ! -z ${verbose+x} ]; then printf "\rChunking FASTA: %d%%" $((100 * (i + 2) / ${#chunk_ranges[@]})) >&2; fi
@@ -1259,6 +1243,19 @@ END {
     find ${chunkdir} -type f -name "chunk_*" |
     parallel --jobs $threads "if [ \$(grep -c '^>' {} ) -eq 1 ]; then tail -n +2 {} | tr -d '\n' | sed -E 's/\$/\n/g' > {}.fasta; else \
     perl -pe 'if(/^>/){ \$_ = \$.==1 ? \"\" : \"\n\" } else { chomp } END { print \"\n\" }' {} > {}.fasta; fi"
+}
+
+function tab2fasta(){
+    if [ ! -z ${multi+x} ]
+    then
+     if [ ! -z ${verbose+x} ]; then echo "Converting to multi line FASTA" >&2; fi
+     cut --fields=2 $1 |
+     sed -E "s/(.{${multi}})/\1\t/g" |
+     paste <(cut --fields=1 $1) - |
+     tr "\t" "\n"
+    else
+     tr "\t" "\n" < $1
+    fi
 }
           
 ###############################################
@@ -1779,7 +1776,7 @@ END {
      SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
      
      # Allocate sequences to requested threads
-     thread_calc $HEADERS $INFILE
+     chunk_calc $(wc --lines < $HEADERS) $threads
      
      # Loop for function getting ORFs for multithreading
      HEADERS_TMP=$(mktemp --tmpdir=$tmpdir fastakit.fastakit.HEADERS_TMP.XXXXXXXXXX)
@@ -1882,7 +1879,7 @@ END {
     then
     SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
     : > $OUTFILE
-    thread_calc $HEADERS $INFILE
+    chunk_calc $(wc --lines < $HEADERS) $threads
     
     for ((core=0;core <= $(($threads - 1));core++))
      do
@@ -2051,18 +2048,42 @@ END {
      fi
      
      # Separate sequences into files
-     if [ ! -z ${separate+x} ]
+     if [ ! -z ${separate_dir+x} ]
      then
+     SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
      if [ ! -z ${verbose+x} ]; then echo "Separating sequences into files" >&2; fi
-      if [ ! -d $separate ]
+      if [ ! -d $separate_dir ]
       then
-       mkdir -p $separate
+       mkdir -p $separate_dir
       fi
-      for ((k=1;k<=$(wc -l < $OUTFILE);k++))
-      do
-       cut --fields=1 $OUTFILE | sed --quiet ''"$k"','"$k"'p;'"$(($k + 1))"'q' > $separate/$k.fasta
-       cut --fields=2 $OUTFILE | sed --quiet ''"$k"','"$k"'p;'"$(($k + 1))"'q' >> $separate/$k.fasta
-      done
+      
+      num_headers=$(wc --lines < $INFILE)
+      
+
+      if [ ${separate_chunks[0]} -gt 0 ]
+      then
+      # Split by number of chunks
+       chunk_calc $num_headers ${separate_chunks[0]}
+      else
+      # Split by size of chunks
+       start=($(seq 1 ${separate_chunks[1]} $num_headers))
+       for ((k=0;k<${#start[@]};k++))
+        do
+        if [ $(($k + 1)) -lt ${#start[@]} ]
+        then
+         end+=($((${start[$k + 1]} - 1)))
+        else
+         end+=($num_headers)
+        fi
+       done
+      fi
+
+       for ((k=0;k<${#start[@]};k++))
+       do
+        awk -v start="${start[$k]}" -v end="${end[$k]}" 'NR>=start && NR<=end' $INFILE |
+        tab2fasta /dev/stdin > $separate_dir"/seq"$(($k + 1))".fasta"
+       done
+      
       if [ ! -z ${verbose+x} ]; then echo -en "\nSequence separation done: " >&2; show_time; fi
       exit 0
      fi
@@ -2078,26 +2099,9 @@ END {
     # OUTPUT
 
      # Convert to Multi-line FASTA
-    if [ ! -z ${multi+x} ]
-    then
-     if [ ! -z ${verbose+x} ]; then echo "Converting to multi line FASTA" >&2; fi
-     SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
-     cut --fields=2 $INFILE |
-     sed -E "s/(.{${multi}})/\1\t/g" |
-     paste <(cut --fields=1 $INFILE) - > $OUTFILE
-     if [ ! -z ${verbose+x} ]; then echo -ne "\nMulti line conversion done: " >&2; show_time; fi
-    fi
-    
-     # Convert tabbed to FASTA
-     SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
-     tr "\t" "\n" < $INFILE |
-     if [ ! -z ${tab_string+x} ]
-     then
-      sed "s/$tab_string/\t/g"
-     else
-      cat
-     fi > $OUTFILE
-     
+    SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
+    tab2fasta $INFILE > $OUTFILE
+        
     # Output inplace or stdout
     if [ ! -z ${inplace+x} ] && [ ! -z ${FILE+x} ]
      then

@@ -27,7 +27,7 @@ fastakit [OPTIONS]... [Sequence.fasta]
 |            | `--gc`        | Calculate percent GC per sequence (Disables --translate)  |
 |            | `--mw`        | Calculate the moleculare weight of DNA/RNA/protein per sequence (ss ds)  |
 |            | `--mw_sort`        | Sort by molecular weight  |
-|            | `--separate [DIR]`        | Separate sequnces into files in directory DIR  |
+|            | `--separate #,# [DIR]`        | Separate sequences into number,size per file in directory DIR (0 to ignore; Default number of sequences)  |
 |            | `--nonnuc`        | Count non-ACTGU characters per sequence  |
 |            | `--rna_dna`        | Convert RNA to DNA / DNA to RNA (Default = no conversion)  |
 |            | `--seq_range #,#`        | Minimum/Maximum sequence size (e.g. 10,50 ; 0 to ignore)  |
