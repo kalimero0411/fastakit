@@ -2067,7 +2067,7 @@ function tab2fasta(){
       else
       # Split by size of chunks
        start=($(seq 1 ${separate_chunks[1]} $num_headers))
-       for ((k=0;k<${#start[@]};k++))
+       for k in ${!start[@]}
         do
         if [ $(($k + 1)) -lt ${#start[@]} ]
         then
@@ -2078,7 +2078,7 @@ function tab2fasta(){
        done
       fi
 
-       for ((k=0;k<${#start[@]};k++))
+       for k in ${!start[@]}
        do
         awk -v start="${start[$k]}" -v end="${end[$k]}" 'NR>=start && NR<=end' $INFILE |
         tab2fasta /dev/stdin > $separate_dir"/seq"$(($k + 1))".fasta"
