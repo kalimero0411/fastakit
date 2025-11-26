@@ -623,8 +623,9 @@ arg=$1
      
      function detect_mol(){
      local mol_input=$(mktemp --tmpdir=$tmpdir fastakit.detect_mol.input.XXXXXXXXXX)
-     mol_input=$1
-     if [ $(grep --ignore-case --max-count=1 --count --perl-regexp "[DEFHIKLMNOPQRSVWY*]" $mol_input) -eq 0 ]
+     grep --invert-match ">" $1 | head --bytes=5MB | tr --delete "\n" > $mol_input
+     # If the number of non-nucleic acid characters is less than 1% of the sequence
+     if [ $((100*$(tr --delete "[AaCcTtGgUuNn]" < $mol_input | wc --chars)/$(wc --chars < $mol_input))) -lt 1 ]
      then
       export MOL=$(mktemp --tmpdir=$tmpdir fastakit.detect_mol.MOL.XXXXXXXXXX)
       export mol_input
@@ -1534,7 +1535,6 @@ function tab2fasta(){
     HEADERS=$(mktemp --tmpdir=$tmpdir fastakit.fastakit.HEADERS.XXXXXXXXXX)
     INFILE=$(mktemp --tmpdir=$tmpdir fastakit.fastakit.INFILE.XXXXXXXXXX)
     OUTFILE=$(mktemp --tmpdir=$tmpdir fastakit.fastakit.OUTFILE.XXXXXXXXXX)
-    DETECT_sample=$(mktemp --tmpdir=$tmpdir fastakit.fastakit.DETECT_sample.XXXXXXXXXX)
 
     # Check if FASTA
     if [ $(head --bytes=1 $FILE) != ">" ]
@@ -1551,8 +1551,7 @@ function tab2fasta(){
     # Detect molecule and exit
     if [ ! -z ${detect+x} ]
     then
-     grep --perl-regexp --invert-match "^>" $INFILE | head --bytes=5000000 > $DETECT_sample
-     detect_mol $DETECT_sample
+     detect_mol $INFILE
      exit 0
     fi
     
@@ -1628,8 +1627,7 @@ function tab2fasta(){
     if [ ! -z ${verbose+x} ]; then echo -n "Loading sequence done: " >&2; show_time; fi
     fi
     
-    head --bytes=5000000 $OUTFILE > $DETECT_sample
-    detect_mol $DETECT_sample
+    detect_mol $OUTFILE
     
     # Exception translate or orf for proteins
     if ([ ! -z ${translate+x} ] || [ ! -z ${orf+x} ]) && [[ $MOLECULE = "PROTEIN" ]]
@@ -1826,8 +1824,7 @@ function tab2fasta(){
 
      if [ ! -z ${verbose+x} ] && [ -z ${translate+x} ]; then echo -n "ORF detection done: " >&2; show_time; fi
      if [ ! -z ${verbose+x} ] && [ ! -z ${translate+x} ]; then echo -n "ORF detection and translation done: " >&2; show_time; fi
-     head --bytes=5000000 $OUTFILE > $DETECT_sample
-     detect_mol $DETECT_sample
+     detect_mol $OUTFILE
     fi
     
     # Separate to codons and translate
@@ -1847,8 +1844,7 @@ function tab2fasta(){
       translate - |
        tr --delete " " > $OUTFILE
        if [ ! -z ${verbose+x} ]; then echo -n "Translation done: " >&2; show_time; fi
-       head --bytes=5000000 $OUTFILE > $DETECT_sample
-       detect_mol $DETECT_sample
+       detect_mol $OUTFILE
     fi
     
     # Minimum/Maximum length
