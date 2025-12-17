@@ -26,7 +26,7 @@ Usage: fastakit [OPTIONS]... [Sequence.fasta]
     -c | --complement	Complementary sequence
     -m | --reverse_seq	Reverse sequence
     --unique	Remove duplicate sequences
-    --multi #	Convert to multi-line FASTA with # line length
+    --multi #	Convert to multi-line FASTA with line length [#]
     --random	Create random sequences of respective length
     -n | --name_sort	Sort FASTA by name
     -l | --length_sort	Sort FASTA by sequence length (shortest to longest)
@@ -34,28 +34,28 @@ Usage: fastakit [OPTIONS]... [Sequence.fasta]
     --upper	Sequences to UPPERCASE
     --lower	Sequences to lowercase
     -o | --orf	Retrieve ORFs
-    --max_orf_num #	Maximum number of ORFs to output per sequence
+    --max_orf_num #	Maximum number [#] of ORFs to output per sequence
     -p | --translate	Protein sequences in current frame
     --table #	Translation code (Default = standard code; '--table list' for all available codes)
     --frame #	Frame to extract codons (Any of frames 1,2,3,4,5,6; 0 = six frames; Default = 1)
     --gc	Calculate percent GC per sequence (Disables --translate)
     --mw	Calculate the moleculare weight of DNA/RNA/protein per sequence (ss ds)
     --mw_sort	Sort by molecular weight
-    --separate #,# [DIR]	Separate sequences into number,size per file in directory DIR (0 to ignore; Default number of sequences)
+    --separate #,# [DIR]	Separate sequences into number of [files,sequences per file] in directory DIR (0 to ignore; Default number of sequences)
     --nonnuc	Count non-ACTGU characters per sequence
     --rna_dna	Convert RNA to DNA / DNA to RNA (Default = no conversion)
-    --seq_range ,#	Minimum/Maximum sequence size (e.g. 10,50 ; 0 to ignore)
-    --max_seq #	Return the # of largest sequences for each input sequence (ORFs, proteins, etc.)
+    --seq_range #,#	[Minimum,Maximum] sequence size (e.g. 10,50 ; 0 to ignore)
+    --max_seq #	Return the number [#] of largest sequences for each input sequence (ORFs, proteins, etc.)
     --name_regex [string]	Truncate FASTA header with regex (used with --max_seq)
     --get_names [string]	Return the sequences with names that match a string (perl regex)
     --check	Check if FASTA file is single line
     --makeanno [string]	Create BED/GFF/GTF output for ORFs (Defaults to --orf and BED format; Default sort by start position)
-    --upstream #	Retrieve # size upstream flanking sequence of ORFs (Assumes --orf)
-    --downstream #	Retrieve # size downstream flanking sequence of ORFs (Assumes --orf)
+    --upstream #	Retrieve upstream flanking sequence of ORFs of size [#] (Assumes --orf)
+    --downstream #	Retrieve downstream flanking sequence of ORFs of size [#] (Assumes --orf)
     --detect	Detect molucule and exit
     --rename [string]	Change all sequence names to {string}_ (e.g. '--rename test', will give '>test1' etc.)
     --extract	Extract contiguous sequences from each sequence (1 = lowercase; 2 = UPPERCASE)
-    --re [string],,#,#,#	Detect restriction enzyme recognition sites\n\t (Restriction enzyme name, min_length, max_length, min_number, max_number; 0 to ignore; 'list' to list all enzymes)
+    --re [string],,#,#,#	Detect restriction enzyme recognition sites\n\t [Restriction enzyme name,min_length,max_length,min_number,max_number] (0 to ignore; 'list' to list all enzymes)
     --stats	Calculate basic stats
     --version	Print version date
     -t | --threads #	Number of CPU threads to use (Default = Detected processors or 1)
@@ -2148,10 +2148,10 @@ function tab2fasta(){
 
       if [ ${separate_chunks[0]} -gt 0 ]
       then
-      # Split by number of chunks
+      # Split by number of files
        chunk_calc $num_headers ${separate_chunks[0]}
       else
-      # Split by size of chunks
+      # Split by number of sequences
        start=($(seq 1 ${separate_chunks[1]} $num_headers))
        for k in ${!start[@]}
         do
@@ -2163,11 +2163,22 @@ function tab2fasta(){
         fi
        done
       fi
-
+      
+      if [ ${#start[@]} -ge $num_headers ]
+      then
+       file_names=($(tr --delete ">" < $HEADERS))
+      else
+       file_names=()
+       for i in $(seq -w 1 ${#start[@]})
+       do
+        file_names+=("seq$i")
+       done
+      fi
+      
        for k in ${!start[@]}
        do
         awk -v start="${start[$k]}" -v end="${end[$k]}" 'NR>=start && NR<=end' $INFILE |
-        tab2fasta /dev/stdin > $separate_dir"/seq"$(($k + 1))".fasta"
+        tab2fasta /dev/stdin > $separate_dir"/"${file_names[$k]}".fasta"
        done
       
       if [ ! -z ${verbose+x} ]; then echo -en "\nSequence separation done: " >&2; show_time; fi
