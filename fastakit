@@ -57,6 +57,7 @@ Usage: fastakit [OPTIONS]... [Sequence.fasta]
     --extract	Extract contiguous sequences from each sequence (1 = lowercase; 2 = UPPERCASE)
     --re [string],,#,#,#	Detect restriction enzyme recognition sites\n\t [Restriction enzyme name,min_length,max_length,min_number,max_number] (0 to ignore; 'list' to list all enzymes)
     --stats	Calculate basic stats
+    --gs	Expected genome size from independent source (works only with --stats)
     --version	Print version date
     -t | --threads #	Number of CPU threads to use (Default = Detected processors or 1)
     -v | --verbose	Verbose
@@ -238,6 +239,10 @@ arg=$1
   --stats)
   stats=1 # Calculate basic stats
   shift
+  ;;
+  --gs)
+  genome_size="$2" # genome size
+  shift 2
   ;;
   --multi)
   multi=$2 # Covert to multiline FASTA
@@ -801,6 +806,32 @@ arg=$1
      local L90_idx=$(awk '{OFS="\t"}; {sum+=$0}; {printf "%s%s%.0f\n", NR,OFS,sum}' $lengths |
      awk -v total=$total -F $'\t' '{if($2 > (total*0.9))printf "%.0f\n", $1}' |
      head -1)
+     if [ ! -z ${genome_size+x} ]
+     then
+     local NG50=$(awk -v genome_size="$genome_size" '
+	  BEGIN{ t50=0.5*genome_size; cum=0; ng50=0 }
+	  {
+	    L=$1
+	    cum += L
+	    if (ng50==0 && cum >= t50) { ng50=L; print ng50; exit }
+	  }
+	  END{
+	    if (ng50==0) print "NA"
+	  }
+	' $lengths)
+     
+     local NG90=$(awk -v genome_size="$genome_size" '
+	  BEGIN{ t90=0.9*genome_size; cum=0; ng90=0 }
+	  {
+	    L=$1
+	    cum += L
+	    if (ng90==0 && cum >= t90) { ng90=L; print ng90; exit }
+	  }
+	  END{
+	    if (ng90==0) print "NA"
+	  }
+	' $lengths)
+     fi 
      local num_seq=$(wc -l < $lengths)
      local half_num=$(awk -v num_seq=$num_seq 'NR==(int(num_seq/2)+1){printf $0}' $lengths)
      seq_short $total
@@ -829,6 +860,25 @@ arg=$1
      seq_short $N90
      echo -e "N90\t"$N90"\t"$size_short >> $stats_output
      echo -e "L90\t"$L90_idx >> $stats_output
+     if [ ! -z ${genome_size+x} ]
+     then
+      seq_short $genome_size
+      echo -e "Genome size\t"$genome_size"\t"$size_short >> $stats_output
+      if [[ $NG50 == "NA" ]]
+      then
+       echo -e "NG50\tAssembly < 0.5 x Genome" >> $stats_output
+      else
+       seq_short $NG50
+       echo -e "NG50\t"$NG50"\t"$size_short >> $stats_output
+      fi
+      if [[ $NG90 == "NA" ]]
+      then
+       echo -e "NG90\tAssembly < 0.9 x Genome" >> $stats_output
+      else
+       seq_short $NG90
+       echo -e "NG90\t"$NG90"\t"$size_short >> $stats_output
+      fi
+     fi
      if [ -t 1 ]
      then
       column -t -s $'\t' $stats_output

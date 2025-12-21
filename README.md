@@ -43,6 +43,7 @@ fastakit [OPTIONS]... [Sequence.fasta]
 |            | `--extract`        | Extract contiguous sequences from each sequence (1 = lowercase; 2 = UPPERCASE)  |
 |            | `--re {string},#,#,#,#`        | Detect restriction enzyme recognition sites\n\t [Restriction enzyme name,min_length,max_length,min_number,max_number] (0 to ignore; 'list' to list all enzymes)  |
 |            | `--stats`        | Calculate basic stats  |
+|            | `--gs`        | Expected genome size from independent source (works only with --stats)  |
 |            | `--version`        | Print version date  |
 | `-t`           | `--threads #`        | Number of CPU threads to use (Default = Detected processors or 1)  |
 | `-v`           | `--verbose`       | Verbose  |
