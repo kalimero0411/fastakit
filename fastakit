@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2025 Beery Yaakov
 set -e
 
 # Default parameters
@@ -65,6 +67,8 @@ Usage: fastakit [OPTIONS]... [Sequence.fasta]
 
 Example: fastakit --orf --frame 0 --seq_range 100,1000 --length-sort sequences.fasta > orfs.fasta
 
+License: MIT
+Copyright (c) 2025 Beery Yaakov
 "
 printf "$usage" | awk -F $'\t' '{ printf "%-30s %s\n", $1, $2 }'
 }
