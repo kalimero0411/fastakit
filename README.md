@@ -25,9 +25,10 @@ fastakit [OPTIONS]... [Sequence.fasta]
 |            | `--table #`        | Translation code (Default = standard code; '--table list' for all available codes)  |
 |            | `--frame #`        | Frame to extract codons (Any of frames 1,2,3,4,5,6; 0 = six frames; Default = 1)  |
 |            | `--gc`        | Calculate percent GC per sequence (Disables --translate)  |
-|            | `--mw`        | Calculate the moleculare weight of DNA/RNA/protein per sequence (ss ds)  |
+|            | `--mw`        | Calculate the moleculare weight of DNA/RNA/protein per sequence (single [tab] double stranded)  |
 |            | `--mw_sort`        | Sort by molecular weight  |
-|            | `--separate #,# [DIR]`        | Separate sequences into number of [files,sequences per file] in directory DIR (0 to ignore; Default number of sequences)  |
+|            | `--file_sep # [DIR]`        | Separate sequences into number of [files] in directory [DIR] (Default over --seq_sep)  |
+|            | `--seq_sep # [DIR]`        | Separate sequences into number of [sequences per file] in directory [DIR]  |
 |            | `--nonnuc`        | Count non-ACTGU characters per sequence  |
 |            | `--rna_dna`        | Convert RNA to DNA / DNA to RNA (Default = no conversion)  |
 |            | `--seq_range #,#`        | [Minimum,Maximum] sequence size (e.g. 10,50 ; 0 to ignore)  |
@@ -39,7 +40,7 @@ fastakit [OPTIONS]... [Sequence.fasta]
 |            | `--upstream #`        | Retrieve upstream flanking sequence of ORFs of size [#] (Assumes --orf)  |
 |            | `--downstream #`        | Retrieve downstream flanking sequence of ORFs of size [#] (Assumes --orf)  |
 |            | `--detect`        | Detect molucule and exit  |
-|            | `--rename [string]`        | Change all sequence names to [string]_# (e.g. '--rename test', will give '>test1' etc.)  |
+|            | `--rename [string]`        | Change all sequence names to [string]# (e.g. '--rename test', will give '>test01', '>test02' etc.)  |
 |            | `--extract`        | Extract contiguous sequences from each sequence (1 = lowercase; 2 = UPPERCASE)  |
 |            | `--re {string},#,#,#,#`        | Detect restriction enzyme recognition sites\n\t [Restriction enzyme name,min_length,max_length,min_number,max_number] (0 to ignore; 'list' to list all enzymes)  |
 |            | `--stats`        | Calculate basic stats  |
@@ -108,4 +109,6 @@ fastakit [OPTIONS]... [Sequence.fasta]
 - The `--random` option applies after all other sequence manipulation processes.
 - The `--makeanno` option enables `--orf` if neither `--orf` or `--extract` are selected, and disables `--translate`. Works with `--seq_range` and `--max_seq`. Use `--makeanno gff` or `--makeanno gtf` to get GFF3 or GTF format, respectively. `--makeanno` sort by start position by default, but this can be changed using `--name_sort`, `--length_sort` and `--reverse_sort`. The `--reverse_sort` in this case applies to the `--length_sort` option, if it exists, or the `--name_sort` option if not.
 - The `--stats` option calculates %GC from non-ambiguous bases only (i.e. ATGCU), while the rest of the stats are calculates from the entire sequence.
-- If the `--separate` option should output more than one sequence per file, the resulting fasta files will output with the names seq1, seq2, etc. Otherwise, the sequence names (headers) are used as file names.
+- If the `--seq_sep` option should output more than one sequence per file, the resulting fasta files will output with the names seq1, seq2, etc. Otherwise, the sequence names (headers) are used as file names.
+- While `--seq_sep` creates files with the input number of sequences, putting the remained in the last file, `--file_sep` attempts to create the input number of files with an equal number of sequences, putting the most sequences in the first files.
+

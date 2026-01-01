@@ -4,7 +4,7 @@
 set -e
 
 # Default parameters
-version=25.12
+version=26.01
 script_dir=$(dirname $(readlink --canonicalize "${BASH_SOURCE[0]}"))
 time_start=$(date +%s)
 threads=$(command nproc --all || echo 1)
@@ -41,9 +41,10 @@ Usage: fastakit [OPTIONS]... [Sequence.fasta]
     --table #	Translation code (Default = standard code; '--table list' for all available codes)
     --frame #	Frame to extract codons (Any of frames 1,2,3,4,5,6; 0 = six frames; Default = 1)
     --gc	Calculate percent GC per sequence (Disables --translate)
-    --mw	Calculate the moleculare weight of DNA/RNA/protein per sequence (ss ds)
+    --mw	Calculate the moleculare weight of DNA/RNA/protein per sequence (single [tab] double stranded)
     --mw_sort	Sort by molecular weight
-    --separate #,# [DIR]	Separate sequences into number of [files,sequences per file] in directory DIR (0 to ignore; Default number of sequences)
+    --file_sep # [DIR]	Separate sequences into number of [files] in directory [DIR]
+    --seq_sep # [DIR]	Separate sequences into number of [sequences per file] in directory [DIR]
     --nonnuc	Count non-ACTGU characters per sequence
     --rna_dna	Convert RNA to DNA / DNA to RNA (Default = no conversion)
     --seq_range #,#	[Minimum,Maximum] sequence size (e.g. 10,50 ; 0 to ignore)
@@ -55,9 +56,9 @@ Usage: fastakit [OPTIONS]... [Sequence.fasta]
     --upstream #	Retrieve upstream flanking sequence of ORFs of size [#] (Assumes --orf)
     --downstream #	Retrieve downstream flanking sequence of ORFs of size [#] (Assumes --orf)
     --detect	Detect molucule and exit
-    --rename [string]	Change all sequence names to {string}_ (e.g. '--rename test', will give '>test1' etc.)
+    --rename [string]	Change all sequence names to [string]# (e.g. '--rename test', will give '>test01', '>test02' etc.)
     --extract	Extract contiguous sequences from each sequence (1 = lowercase; 2 = UPPERCASE)
-    --re [string],,#,#,#	Detect restriction enzyme recognition sites\n\t [Restriction enzyme name,min_length,max_length,min_number,max_number] (0 to ignore; 'list' to list all enzymes)
+    --re [string],#,#,#,#	Detect restriction enzyme recognition sites\n\t [Restriction enzyme name,min_length,max_length,min_number,max_number] (0 to ignore; 'list' to list all enzymes)
     --stats	Calculate basic stats
     --gs	Expected genome size from independent source (works only with --stats)
     --version	Print version date
@@ -146,8 +147,13 @@ arg=$1
   nonnuc=1 # Count non-ACTGU characters
   shift
   ;;
-  --separate)
-  separate_chunks=($(echo "$2" | tr "," " "))
+  --file_sep)
+  file_chunks="$2"
+  separate_dir=$(readlink --canonicalize "$3")
+  shift 3
+  ;;
+  --seq_sep)
+  seq_chunks="$2"
   separate_dir=$(readlink --canonicalize "$3")
   shift 3
   ;;
@@ -290,9 +296,9 @@ arg=$1
   then
    break
   else
-  echo "Unknown option: "$1
-  print_usage
-  exit 1
+  echo "Unknown option: $1" >&2
+  print_usage >&2
+  exit 2
   fi
   ;;
   esac
@@ -2200,13 +2206,13 @@ function tab2fasta(){
       num_headers=$(wc --lines < $INFILE)
       
 
-      if [ ${separate_chunks[0]} -gt 0 ]
+      if [ ! -z ${file_chunks+x} ]
       then
       # Split by number of files
-       chunk_calc $num_headers ${separate_chunks[0]}
+       chunk_calc $num_headers $file_chunks
       else
       # Split by number of sequences
-       start=($(seq 1 ${separate_chunks[1]} $num_headers))
+       start=($(seq 1 $seq_chunks $num_headers))
        for k in ${!start[@]}
         do
         if [ $(($k + 1)) -lt ${#start[@]} ]
