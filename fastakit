@@ -987,8 +987,8 @@ arg=$1
        then
         local ORFHEADERS=$(mktemp --tmpdir=$tmpdir fastakit.orf_search.ORFHEADERS.orf_core$orf_core.XXXXXXXXXX)
         local ORFFILE1=$(mktemp --tmpdir=$tmpdir fastakit.orf_search.ORFFILE1.orf_core$orf_core.XXXXXXXXXX)
-        awk -v start="$ORFstart" -v end="$ORFend" 'NR>=start && NR<=end' $4 > $ORFFILE1
-        awk -v start="$ORFstart" -v end="$ORFend" 'NR>=start && NR<=end' $5 > $ORFHEADERS
+        awk -v ORFstart="$ORFstart" -v ORFend="$ORFend" 'NR>=ORFstart && NR<=ORFend' $4 > $ORFFILE1
+        awk -v ORFstart="$ORFstart" -v ORFend="$ORFend" 'NR>=ORFstart && NR<=ORFend' $5 > $ORFHEADERS
        else
         ORFFILE1=$4
         ORFHEADERS=$5
@@ -1925,12 +1925,13 @@ function tab2fasta(){
      
      # Allocate sequences to requested threads
      chunk_calc $(wc --lines < $HEADERS) $threads
+     chunk_threads=${#start[@]}
      
      # Loop for function getting ORFs for multithreading
      HEADERS_TMP=$(mktemp --tmpdir=$tmpdir fastakit.fastakit.HEADERS_TMP.XXXXXXXXXX)
      : > $OUTFILE 
 
-      for ((core=0;core <= $(($threads - 1));core++))
+      for ((core=0;core <= $(($chunk_threads - 1));core++))
       do
        declare OUTCORE$core=$(mktemp --tmpdir=$tmpdir fastakit.fastakit.OUTCORE$core.XXXXXXXXXX)
        declare HEADCORE$core=$(mktemp --tmpdir=$tmpdir fastakit.fastakit.HEADCORE$core.XXXXXXXXXX)
@@ -1950,7 +1951,7 @@ function tab2fasta(){
        wait $pid
       done
             
-      for ((core=0;core <= $(($threads - 1));core++))
+      for ((core=0;core <= $(($chunk_threads - 1));core++))
       do
       if [ ! -z ${makeanno+z} ]
       then
@@ -2026,8 +2027,9 @@ function tab2fasta(){
     SWITCH=$OUTFILE; OUTFILE=$INFILE; INFILE=$SWITCH
     : > $OUTFILE
     chunk_calc $(wc --lines < $HEADERS) $threads
+    chunk_threads=${#start[@]}
     
-    for ((core=0;core <= $(($threads - 1));core++))
+    for ((core=0;core <= $(($chunk_threads - 1));core++))
      do
       declare OUTCORE$core=$(mktemp --tmpdir=$tmpdir fastakit.fastakit.OUTCORE$core.XXXXXXXXXX)
       declare HEADCORE$core=$(mktemp --tmpdir=$tmpdir fastakit.fastakit.HEADCORE$core.XXXXXXXXXX)
@@ -2040,7 +2042,7 @@ function tab2fasta(){
        wait $pid
       done
       
-      for ((core=0;core <= $(($threads - 1));core++))
+      for ((core=0;core <= $(($chunk_threads - 1));core++))
       do
        outcore_tmp=OUTCORE$core
        cat ${!outcore_tmp} >> $OUTFILE

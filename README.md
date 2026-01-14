@@ -94,9 +94,9 @@ fastakit [OPTIONS]... [Sequence.fasta]
 | 33          |  Cephalodiscidae Mitochondrial UAA-Tyr        |
 
 ## Comments
-- The `-g | --orf` option divides each sequence into individual ORFs from a start to a stop codon in the current frame, or until the end of the sequence.
+- The `-o | --orf` option divides each sequence into individual ORFs from a start to a stop codon in the current frame.
 - If `-i | --in-place` is not selected, all output is to stdout by default.
-- The `--frame` option can take multiple inputs of numbers 1-6 seperated by a comma, or number 0 which is equivilant to 1,2,3,4,5,6.
+- The `--frame` option can take multiple inputs of numbers 1-6 seperated by a comma, or 0 which is equivilant to 1,2,3,4,5,6.
 - The `-p | --translate` option applies to each ORF only if `--orf` is selected, otherwise it applies to the entire sequence, regardless of start/stop codons.
 - The `-l | --length_sort` option applies after ORFs are retrieved and/or sequences are translated.
 - If you want the reverse complement, use `-c | --complement` and `-m | --reverse_seq`.
@@ -107,8 +107,8 @@ fastakit [OPTIONS]... [Sequence.fasta]
 - If `--re` is given a restriction enzyme name (i.e. not 0), the restrictions for recognition site length are removed.
 - Selecting `--re list` gives a list of all possible enzymes.
 - The `--random` option applies after all other sequence manipulation processes.
-- The `--makeanno` option enables `--orf` if neither `--orf` or `--extract` are selected, and disables `--translate`. Works with `--seq_range` and `--max_seq`. Use `--makeanno gff` or `--makeanno gtf` to get GFF3 or GTF format, respectively. `--makeanno` sort by start position by default, but this can be changed using `--name_sort`, `--length_sort` and `--reverse_sort`. The `--reverse_sort` in this case applies to the `--length_sort` option, if it exists, or the `--name_sort` option if not.
-- The `--stats` option calculates %GC from non-ambiguous bases only (i.e. ATGCU), while the rest of the stats are calculates from the entire sequence.
-- If the `--seq_sep` option should output more than one sequence per file, the resulting fasta files will output with the names seq1, seq2, etc. Otherwise, the sequence names (headers) are used as file names.
+- The `--makeanno` option enables `--orf` if neither `--orf` or `--extract` are selected, and disables `--translate`. Works with `--seq_range` and `--max_seq`. Use `--makeanno gff` or `--makeanno gtf` to get GFF3 or GTF format, respectively. `--makeanno` sorts by start position by default, but this can be changed using `--name_sort`, `--length_sort` and `--reverse_sort`. The `--reverse_sort` in this case applies to the `--length_sort` option, if it exists, or the `--name_sort` option if not.
+- The `--stats` option calculates %GC from non-ambiguous bases only (i.e. ATGCU), while the rest of the stats are calculated from the entire sequence.
+- If the `--seq_sep` or `--file_sep` options should output more than one sequence per file, the resulting fasta files will output with the names seq1, seq2, etc. Otherwise, the sequence names (headers) are used as file names.
 - While `--seq_sep` creates files with the input number of sequences, putting the remained in the last file, `--file_sep` attempts to create the input number of files with an equal number of sequences, putting the most sequences in the first files.
 
