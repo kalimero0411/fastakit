@@ -4,7 +4,7 @@
 set -e
 
 # Default parameters
-version=26.01
+version=26.04
 script_dir=$(dirname $(readlink --canonicalize "${BASH_SOURCE[0]}"))
 time_start=$(date +%s)
 threads=$(command nproc --all || echo 1)
@@ -45,6 +45,7 @@ Usage: fastakit [OPTIONS]... [Sequence.fasta]
     --mw_sort	Sort by molecular weight
     --file_sep # [DIR]	Separate sequences into number of [files] in directory [DIR]
     --seq_sep # [DIR]	Separate sequences into number of [sequences per file] in directory [DIR]
+    --balance_sep # [DIR]	Separate sequences into [files] sequence length-balanced files in directory [DIR]
     --nonnuc	Count non-ACTGU characters per sequence
     --rna_dna	Convert RNA to DNA / DNA to RNA (Default = no conversion)
     --seq_range #,#	[Minimum,Maximum] sequence size (e.g. 10,50 ; 0 to ignore)
@@ -154,6 +155,11 @@ arg=$1
   ;;
   --seq_sep)
   seq_chunks="$2"
+  separate_dir=$(readlink --canonicalize "$3")
+  shift 3
+  ;;
+  --balance_sep)
+  balance_chunks="$2"
   separate_dir=$(readlink --canonicalize "$3")
   shift 3
   ;;
@@ -2205,6 +2211,8 @@ function tab2fasta(){
        mkdir -p $separate_dir
       fi
       
+      if [ ! -z ${file_chunks+x} ] || [ ! -z ${seq_chunks+x} ]
+      then
       num_headers=$(wc --lines < $INFILE)
       
 
@@ -2243,6 +2251,23 @@ function tab2fasta(){
         tab2fasta /dev/stdin > $separate_dir"/"${file_names[$k]}".fasta"
        done
       
+      fi
+      
+      
+      if [ ! -z ${balance_chunks+x} ]
+      then
+       # Split by number of sequences
+       balance_dir=$(mktemp --tmpdir=$tmpdir --directory balance_dir.XXXXXXXXXX)
+       fasta_lengths=$(mktemp --tmpdir=$tmpdir fastakit.fasta_lengths.XXXXXXXXXX)
+       awk -F $'\t' -v OFS=$'\t' '{print $1,length($2)}' $INFILE > $fasta_lengths
+       Rscript $script_dir/balanced_split.R $balance_dir $fasta_lengths $balance_chunks ${verbose-0}
+       for chunk in $balance_dir/*
+       do
+        awk -F $'\t' 'NR==FNR {arr[$1]; next} $1 in arr' $chunk $INFILE |
+        tab2fasta /dev/stdin > $separate_dir"/"$(basename $chunk)
+       done
+      fi
+     
       if [ ! -z ${verbose+x} ]; then echo -en "\nSequence separation done: " >&2; show_time; fi
       exit 0
      fi

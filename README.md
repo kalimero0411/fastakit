@@ -29,6 +29,7 @@ fastakit [OPTIONS]... [Sequence.fasta]
 |            | `--mw_sort`        | Sort by molecular weight  |
 |            | `--file_sep # [DIR]`        | Separate sequences into number of [files] in directory [DIR] (Default over --seq_sep)  |
 |            | `--seq_sep # [DIR]`        | Separate sequences into number of [sequences per file] in directory [DIR]  |
+|            | `--balance_sep # [DIR]`        | Separate sequences into [files] sequence length-balanced files in directory [DIR]  |
 |            | `--nonnuc`        | Count non-ACTGU characters per sequence  |
 |            | `--rna_dna`        | Convert RNA to DNA / DNA to RNA (Default = no conversion)  |
 |            | `--seq_range #,#`        | [Minimum,Maximum] sequence size (e.g. 10,50 ; 0 to ignore)  |
