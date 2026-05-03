@@ -1402,6 +1402,68 @@ local chunk_ranges=($(awk -v T="$threads" -v TL="$total_lines" '
     perl -pe 'if(/^>/){ \$_ = \$.==1 ? \"\" : \"\n\" } else { chomp } END { print \"\n\" }' {} > {}.fasta; fi"
 }
 
+function balanced_split(){
+    local wd="$1"
+    local lengths="$2"
+    local split="$3"
+    local verbose="$4"
+
+    cd "$wd" || return 1
+
+    awk -v n="$split" -v verbose="$verbose" '
+    BEGIN {
+        FS = OFS = "\t"
+        if (n < 1) {
+            print "ERROR: split must be >= 1" > "/dev/stderr"
+            exit 1
+        }
+    }
+
+    {
+        prot[NR] = $1
+        len[NR]  = $2 + 0
+        total = NR
+    }
+
+    function cmp(i1, v1, i2, v2) {
+        if (len[i1] == len[i2]) return prot[i1] < prot[i2] ? -1 : 1
+        return len[i1] > len[i2] ? -1 : 1
+    }
+    
+    END {
+        asorti(prot, order, "cmp")
+
+        for (i = 1; i <= n; i++) {
+            sum[i] = 0
+            out[i] = "balanced_chunk_" i ".fasta"
+            close(out[i])
+            system("rm -f " out[i])
+        }
+
+        for (rank = 1; rank <= total; rank++) {
+            idx = order[rank]
+
+            min_idx = 1
+            for (i = 2; i <= n; i++) {
+                if (sum[i] < sum[min_idx]) min_idx = i
+            }
+
+            print prot[idx] >> out[min_idx]
+            sum[min_idx] += len[idx]
+
+            if (verbose == 1) {
+                pct = int((rank / total) * 100)
+                printf "Splitting sequences: %d%%\r", pct > "/dev/stderr"
+            }
+        }
+
+        if (verbose == 1) {
+            printf "\n" > "/dev/stderr"
+        }
+    }
+    ' "$lengths"
+}
+
 function tab2fasta(){
     if [ ! -z ${multi+x} ]
     then
@@ -2260,7 +2322,7 @@ function tab2fasta(){
        balance_dir=$(mktemp --tmpdir=$tmpdir --directory balance_dir.XXXXXXXXXX)
        fasta_lengths=$(mktemp --tmpdir=$tmpdir fastakit.fasta_lengths.XXXXXXXXXX)
        awk -F $'\t' -v OFS=$'\t' '{print $1,length($2)}' $INFILE > $fasta_lengths
-       Rscript $script_dir/balanced_split.R $balance_dir $fasta_lengths $balance_chunks ${verbose-0}
+       balanced_split $balance_dir $fasta_lengths $balance_chunks ${verbose-0}
        for chunk in $balance_dir/*
        do
         awk -F $'\t' 'NR==FNR {arr[$1]; next} $1 in arr' $chunk $INFILE |
