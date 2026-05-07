@@ -785,20 +785,22 @@ arg=$1
       
      # Sequence size short
      function seq_short(){
-     input=$1
-     if [ $input -ge 1000 ]
+     input=${1:-0}
+     size_short=""
+
+     if [ "$input" -ge 1000 ]
      then
       local input_short=Kbp
       local input_div=1000
-      if [ $input -ge 1000000 ]
+      if [ "$input" -ge 1000000 ]
       then
        local input_short=Mbp
        local input_div=1000000
-       if [ $input -ge 1000000000 ]
+       if [ "$input" -ge 1000000000 ]
        then
         local input_short=Gbp
         local input_div=1000000000
-        if [ $input -ge 1000000000000 ]
+        if [ "$input" -ge 1000000000000 ]
         then
          local input_short=Tbp
          local input_div=1000000000000
@@ -857,8 +859,20 @@ arg=$1
      echo -e "Longest sequence\t"$(head -1 $lengths)"\t"$size_short >> $stats_output
      seq_short $(tail -1 $lengths)
      echo -e "Shortest sequence\t"$(tail -1 $lengths)"\t"$size_short >> $stats_output
-     local seq_median=($(awk -v num_seq=$num_seq -v half_num=$half_num \
-     'NR==int(num_seq/2){if(num_seq/2 == int(num_seq/2)){printf "%.1f", ($0+half_num)/2; printf " "; printf "%.0f", ($0+half_num)/2} else {printf "%.0f", $0; printf " "; printf "%.0f", $0}}' $lengths))
+     local seq_median=($(awk -v num_seq="$num_seq" '
+     {
+         len[NR] = $1
+     }
+     END {
+         if (num_seq % 2 == 1) {
+             m = len[int(num_seq / 2) + 1]
+             printf "%.0f %.0f", m, m
+         } else {
+             m = (len[num_seq / 2] + len[num_seq / 2 + 1]) / 2
+             printf "%.1f %.0f", m, m
+         }
+     }
+     ' "$lengths"))
      seq_short ${seq_median[1]}
      echo -e "Median\t"${seq_median[0]}"\t"$size_short >> $stats_output
      local seq_mean=($(awk -v total=$total -v num_seq=$num_seq 'BEGIN{printf "%.2f", total/num_seq; printf " "; printf "%.0f", total/num_seq}'))
